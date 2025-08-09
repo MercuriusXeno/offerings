@@ -1,9 +1,0 @@
-<Entity tags="target_altar">
-
-  <Base file="mods/wand_workshop/files/entities/base_altar.xml">
-    <ParticleEmitterComponent
-      image_animation_file="mods/wand_workshop/files/entities/target_altar_runes.png"
-      emitted_material_name="spark_teal"
-    />
-  </Base>
-</Entity>

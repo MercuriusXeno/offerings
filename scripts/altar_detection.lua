@@ -1,8 +1,8 @@
 ---@diagnostic disable: lowercase-global, missing-global-doc
 dofile_once("data/scripts/lib/utilities.lua")
-dofile_once_("data/scripts/lib/item_utils")
-dofile_once("mods/wand_workshop/files/scripts/altar.lua")
-dofile_once("mods/wand_workshop/files/scripts/debug.lua")
+dofile_once("mods/offerings/scripts/item_utils.lua")
+dofile_once("mods/offerings/scripts/altar.lua")
+dofile_once("mods/offerings/scripts/debug.lua")
 
 
 -- big chunk of setup is mostly to get the  and the entities within it

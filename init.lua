@@ -1,7 +1,7 @@
 dofile_once("data/scripts/lib/utilities.lua")
-dofile_once("mods/wand_workshop/files/scripts/debug.lua")
-dofile_once("mods/wand_workshop/files/scripts/setting_constants.lua")
-dofile_once("mods/wand_workshop/files/translations/append_localizations.lua")
+dofile_once("mods/offerings/scripts/debug.lua")
+dofile_once("mods/offerings/scripts/setting_constants.lua")
+dofile_once("mods/offerings/translations/append_localizations.lua")
 
 -- cursed biome splice for altar_left which hates me and wants me to be unhappy.
 if ModImageMakeEditable then
@@ -18,14 +18,14 @@ if ModImageMakeEditable then
         end
     end
     -- the material splice is a bit wider than the visual splice
-    splice("data/biome_impl/temple/altar_left.png", "mods/wand_workshop/files/biomes/temple/altar_left.png", 305, 86)
-    splice("data/biome_impl/temple/altar_left_visual.png", "mods/wand_workshop/files/biomes/temple/altar_left_visual.png",
+    splice("data/biome_impl/temple/altar_left.png", "mods/offerings/biomes/temple/altar_left.png", 305, 86)
+    splice("data/biome_impl/temple/altar_left_visual.png", "mods/offerings/biomes/temple/altar_left_visual.png",
         314, 86)
 end
 
-dofile_once("mods/wand_workshop/files/biomes/append_biomes.lua")
+dofile_once("mods/offerings/biomes/append_biomes.lua")
 
-local emit_last_key = "wand_workshop.emit_last"
+local emit_last_key = "offerings.emit_last"
 function OnWorldInitialized()          -- This is called once the game world is initialized. Doesn't ensure any world chunks actually exist. Use OnPlayerSpawned to ensure the chunks around player have been loaded or created.	
     -- Some global stuff I do for debugs to make my brain hurt less
     GlobalsSetValue(emit_last_key, "-60") -- this is for particles for showing stuff works

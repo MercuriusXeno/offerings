@@ -32,6 +32,6 @@
 but it can be significantly slower than this (5-10 works great) -->
   <LuaComponent
     execute_every_n_frame="1"
-    script_source_file="mods/wand_workshop/files/scripts/altar_detection.lua">
+    script_source_file="mods/offerings/scripts/altar_detection.lua">
   </LuaComponent>
 </Entity>

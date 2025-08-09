@@ -6,15 +6,15 @@ function init(x, y, w, h, ...)
   old_init(x, y, w, h, ...)
   local scene_x = x + 195
   local scene_y = y + 378
-  LoadPixelScene("mods/wand_workshop/files/biomes/mountain/hall.png",
-    "mods/wand_workshop/files/biomes/mountain/hall_visual.png",
+  LoadPixelScene("mods/offerings/biomes/mountain/hall.png",
+    "mods/offerings/biomes/mountain/hall_visual.png",
     scene_x, scene_y, "", true)
 end
 
 function spawn_target_altar(x, y)
-  EntityLoad("mods/wand_workshop/files/entities/target_altar.xml", x, y - 5)
+  EntityLoad("mods/offerings/entities/target_altar.xml", x, y - 5)
 end
 
 function spawn_offer_altar(x, y)
-  EntityLoad("mods/wand_workshop/files/entities/offer_altar.xml", x, y - 5)
+  EntityLoad("mods/offerings/entities/offer_altar.xml", x, y - 5)
 end

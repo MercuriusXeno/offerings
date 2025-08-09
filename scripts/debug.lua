@@ -1,8 +1,8 @@
 dofile_once("data/scripts/lib/utilities.lua")
 
-local debug_prefix = "-== WAND_WORKSHOP_DEBUG ==-   "
-local emit_last_key = "wand_workshop.emit_last"
-local emit_cooldown_key = "wand_workshop.emit_cooldown"
+local debug_prefix = "-== offerings_DEBUG ==-   "
+local emit_last_key = "offerings.emit_last"
+local emit_cooldown_key = "offerings.emit_cooldown"
 local emit_particle = "data/entities/particles/poof_blue.xml"
 
 function Debug_Cooldown()
@@ -10,11 +10,11 @@ function Debug_Cooldown()
 end
 
 function Is_Debug()
-    return ModSettingGet("wand_workshop.is_debug_mode") == "true"
+    return ModSettingGet("offerings.is_debug_mode") == "true"
 end
 
 function Is_Emit_Debug()
-    return ModSettingGet("wand_workshop.is_debug_emit_allowed") == "true"
+    return ModSettingGet("offerings.is_debug_emit_allowed") == "true"
 end
 
 ---Returns the last emit frame

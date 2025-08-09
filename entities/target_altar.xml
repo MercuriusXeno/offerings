@@ -1,0 +1,9 @@
+<Entity tags="target_altar">
+
+  <Base file="mods/offerings/entities/base_altar.xml">
+    <ParticleEmitterComponent
+      image_animation_file="mods/offerings/entities/target_altar_runes.png"
+      emitted_material_name="spark_teal"
+    />
+  </Base>
+</Entity>

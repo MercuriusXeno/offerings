@@ -1,8 +1,8 @@
 <Entity tags="offer_altar">
 
-  <Base file="mods/wand_workshop/files/entities/base_altar.xml">
+  <Base file="mods/offerings/entities/base_altar.xml">
     <ParticleEmitterComponent
-      image_animation_file="mods/wand_workshop/files/entities/offer_altar_runes.png"
+      image_animation_file="mods/offerings/entities/offer_altar_runes.png"
       emitted_material_name="spark"
       x_pos_offset_min="1"
       x_pos_offset_max="1"

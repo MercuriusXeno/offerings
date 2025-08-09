@@ -1,7 +1,7 @@
 ---@diagnostic disable: lowercase-global, missing-global-doc, deprecated
 dofile_once("data/scripts/lib/utilities.lua")
-dofile_once("mods/wand_workshop/files/scripts/component_utils.lua")
-dofile_once("mods/wand_workshop/files/scripts/debug.lua")
+dofile_once("mods/offerings/scripts/component_utils.lua")
+dofile_once("mods/offerings/scripts/debug.lua")
 
 -- important constants used for consistency/cleanup
 local align_offset_x = 0
@@ -27,67 +27,7 @@ local reaction_speed_localization = "$workshop_flask_reaction_speed"
 local barrel_size_localization = "$workshop_flask_barrel_size"
 local fill_rate_localization = "$workshop_flask_fill_rate"
 
-local flask_enchant_prefix = "wand_workshop_flask_enchant_"
-
----Detects if an item is a tablet based on tags
----@param item_id integer
----@return integer
-function Detect_Tablet(item_id)
-    if not EntityHasTag(item_id, "tablet") then return 0 end
-    -- stone tablets remove all reactive and add inert
-    if EntityHasTag(item_id, "forged_tablet") then return 5 end
-    if EntityHasTag(item_id, "normal_tablet") then return 1 end
-    -- idk why not just default instead of normal tablet, but this is in case there is a fall through?
-    return 1
-end
-
----Detects if an item is a Book or Notes on Grand Alchemy based on tags and internal strings
----@param item_id integer
----@return integer
-function Detect_Scroll(item_id)
-    if not EntityHasTag(item_id, "scroll") then return 0 end
-
-    local comps = EntityGetComponentIncludingDisabled(item_id, "ItemComponent") or {}
-    for _, comp in ipairs(comps) do
-        local name = ComponentGetValue2(comp, "item_name")
-        if name:find("book_s_") then
-            return 5 -- notes on grand alchemy max out reactivity
-        end
-    end
-    return 1
-end
-
----Detects if an item is a brimstone based on tags
----@param item_id integer
----@return integer
-function Detect_Kiauskivi(item_id)
-    if EntityHasTag(item_id, "brimstone") then return 1 end
-    return 0
-end
-
----Detects if an item is a thunderstone based on tags
----@param item_id integer
----@return integer
-function Detect_Ukkoskivi(item_id)
-    if EntityHasTag(item_id, "thunderstone") then return 1 end
-    return 0
-end
-
----Detects if an item is a potion mimic based on item name
----@param item_id integer
----@return integer
-function Detect_Potion_Mimic(item_id)
-    if Is_Named(item_id, "$item_potion_mimic") then return 1 end
-    return 0
-end
-
----Detects if an item is a vuoksikivi based on tags
----@param item_id integer
----@return integer
-function Detect_Vuoksikivi(item_id)
-    if EntityHasTag(item_id, "waterstone") then return 1 end
-    return 0
-end
+local flask_enchant_prefix = "offerings_flask_enchant_"
 
 --- Make flask unbreakable by removing its DamageModelComponent(s)
 function Apply_Tempered(flask_id, level)
@@ -379,7 +319,7 @@ function Add_Altar_Item(altar_id, item_id)
 
     -- if the item is a wand we enable its snazzy wand-acquisition script
     if EntityHasTag(item_id, "wand") then 
-        local luaComponent = EntityGetFirstComponentWithVariable(item_id, "LuaComponent", "script_item_picked_up",
+        local luaComponent = ecomp_byvar(item_id, "LuaComponent", "script_item_picked_up",
             "data/scripts/particles/wand_pickup.lua")
         if luaComponent ~= nil then EntitySetComponentIsEnabled(item_id, luaComponent, true) end
      end
@@ -428,7 +368,7 @@ end
 ---Makes the wand have some particles like shop wands and wands you're seeing for the first time.
 ---@param item_id any
 function Emit_New_Item_Glow(item_id)
-    local particle_comp = EntityGetFirstComponentWithVariable(item_id, "SpriteParticleEmitterComponent",
+    local particle_comp = ecomp_byvar(item_id, "SpriteParticleEmitterComponent",
         "velocity_always_away_from_center", nil)
     if particle_comp then
         EntitySetComponentIsEnabled(item_id, particle_comp, true)
@@ -465,7 +405,7 @@ function Undo_Stasis(item_id)
 end
 
 function Stop_New_Item_Glow(item_id)
-    local particle_comp = EntityGetFirstComponentWithVariable(item_id, "SpriteParticleEmitterComponent",
+    local particle_comp = ecomp_byvar(item_id, "SpriteParticleEmitterComponent",
         "velocity_always_away_from_center", nil)
     if particle_comp ~= nil then EntitySetComponentIsEnabled(item_id, particle_comp, false) end
 end
@@ -534,18 +474,6 @@ end
 function Print_Item_Stats(target_item_id, target_altar_id, offer_altar_id)
     if Is_Wand(target_item_id) then Print_Wand_Stats(target_altar_id, offer_altar_id) end
     if Is_Flask(target_item_id) then Print_Flask_Stats(target_altar_id, offer_altar_id) end
-end
-
----Returns true if the item entity has an item component which matches
----the name input provided. This is the localization name eg. $item_brimstone
----@param entity_id any
----@param which_item any
----@return boolean
-function Is_Named(entity_id, which_item)
-    local item_comp = EntityGetFirstComponent(entity_id, "ItemComponent")
-    if not item_comp then return false end
-    local item_name = ComponentGetValue2(item_comp, "item_name")
-    return type(item_name) == "string" and item_name == which_item
 end
 
 ---Destroy any items that are the same type as the target item.

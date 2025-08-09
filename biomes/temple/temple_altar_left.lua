@@ -7,15 +7,15 @@ RegisterSpawnFunction(0xff6a17a9, "spawn_offer_altar")
 --   old_init(x, y, w, h, ...)
 --   -- local scene_x = x + 314
 --   -- local scene_y = y + 346
---   -- LoadPixelScene("mods/wand_workshop/files/biomes/temple/altar_left.png",
---   --   "mods/wand_workshop/files/biomes/temple/altar_left_visual.png",
+--   -- LoadPixelScene("mods/offerings/biomes/temple/altar_left.png",
+--   --   "mods/offerings/biomes/temple/altar_left_visual.png",
 --   --   scene_x, scene_y, "", true)
 -- end
 
 function spawn_target_altar(x, y)
-  EntityLoad("mods/wand_workshop/files/entities/target_altar.xml", x + 1, y - 6)
+  EntityLoad("mods/offerings/entities/target_altar.xml", x + 1, y - 6)
 end
 
 function spawn_offer_altar(x, y)
-  EntityLoad("mods/wand_workshop/files/entities/offer_altar.xml", x + 1, y - 6)
+  EntityLoad("mods/offerings/entities/offer_altar.xml", x + 1, y - 6)
 end
