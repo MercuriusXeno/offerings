@@ -1,0 +1,37 @@
+<Entity tags="workshop_altar">
+
+  <ParticleEmitterComponent
+    _enabled="0"
+    _tags="item_effect"
+    gravity.y="0.0"
+    y_pos_offset_min="11"
+    y_pos_offset_max="11"
+    x_pos_offset_min="0"
+    x_pos_offset_max="0"
+    lifetime_min="0.5"
+    lifetime_max="1"
+    count_min="1"
+    count_max="1"
+    render_on_grid="1"
+    fade_based_on_lifetime="1"
+    area_circle_radius.min="0"
+    area_circle_radius.max="0"
+    cosmetic_force_create="1"
+    collide_with_grid="0"
+    emission_interval_min_frames="1"
+    emission_interval_max_frames="1"
+    emit_cosmetic_particles="1"
+    image_animation_speed="32"
+    image_animation_loop="1"
+    render_back="1"
+    is_emitting="1"
+  >
+  </ParticleEmitterComponent>
+
+  <!-- running this EVERY frame lets it intercept thrown potions more safely
+but it can be significantly slower than this (5-10 works great) -->
+  <LuaComponent
+    execute_every_n_frame="1"
+    script_source_file="mods/wand_workshop/files/scripts/altar_detection.lua">
+  </LuaComponent>
+</Entity>

@@ -1,0 +1,3 @@
+function Is_Flask(item_id) return EntityHasTag(item_id, "potion") or Is_Named(item_id, "$item_cocktail") end
+
+function Is_Wand(item_id) return EntityHasTag(item_id, "wand") end
