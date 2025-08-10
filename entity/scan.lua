@@ -16,41 +16,38 @@ function isValidTarget(eid) return not isAltar(eid) and not isInventory(eid) and
 
 function isValidOffer(target, eid) return not isAltar(eid) and not isInventory(eid) and isOfferMatched(target, eid) end
 
-function isItemLinkAllowed(target, eid) return isValidTarget(eid) or isValidOffer(target, eid) end
-
 local function scanForItems()
+    local thonk = dofile("mods/offerings/lib/thonk.lua")
     local altar = GetUpdatedEntityID()
-    local isUpper = isUpperAltar(altar)
+    local upperAltar = getUpperAltar(altar)
+    local target = target(upperAltar)
+    local isUpper = altar == upperAltar
     local radius = isUpper and 13 or 38
     local x, y = EntityGetTransform(altar)
     local entities = EntityGetInRadius(x, y, radius)
-    local upperAltar = isUpper(altar) and altar or getUpperAltar(altar)
-    local target = target(upperAltar)
     local isNewTarget = isUpper and not target
-    local hasTarget = not isNewTarget
     local existingLinkedItems = linkedItems(altar)
     local hasUpdates = false
     for _, eid in ipairs(entities) do
-        if isNewTarget or (hasTarget and isItemLinkAllowed(target, eid)) then            
+        if isNewTarget or isValidOffer(target, eid) then
             if isLinked(altar, eid) then
                 for k, existingLink in pairs(existingLinkedItems) do
                     if existingLink == eid then existingLinkedItems[k] = nil end
                 end
             end
             local ex, ey = EntityGetTransform(eid)
+            thonk.step("before radial check")
             if entityIn(ex, ey, x, y, radius, 5) then
-                local isValidOffer = not isUpper and not isNewTarget and isOfferMatched(target, eid)
-                local isLinkingItem = isNewTarget or isValidOffer
-
+                thonk.step("in in radius")
                 if isNewTarget then
+                    thonk.step("in is new target")
                     if isWand(eid) then memorizeWand(altar, eid) end
                     if isFlask(eid) then storeFlaskStats(altar, eid) end
                 end
 
-                if isLinkingItem then
-                    handleAltarLink(altar, isUpper, eid, true, x, y, ex, ey)
-                    hasUpdates = true
-                end
+                thonk.step("in is linking")
+                handleAltarLink(altar, isUpper, eid, true, x, y, ex, ey)
+                hasUpdates = true
             end
         end
     end

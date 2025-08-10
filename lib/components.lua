@@ -1,13 +1,19 @@
+dofile_once("mods/offerings/lib/math.lua")
+dofile_once("mods/offerings/lib/logging.lua")
 local VSC = "VariableStorageComponent"
 local originalStats = "original_stats_"
 
 function componentsOfType(eid, ctype, tag)
-  return EntityGetComponentIncludingDisabled(eid, ctype, tag) or {}
+  if tag ~= nil then
+    return EntityGetComponentIncludingDisabled(eid, ctype, tag) or {}
+  else
+    return EntityGetComponentIncludingDisabled(eid, ctype) or {}
+  end
 end
 
 function componentsWhere(eid, ctype, tag, pred)
-  local arr = {}  
-  local function push(comp) arr[#arr+1] = comp end
+  local arr = {}
+  local function push(comp) arr[#arr + 1] = comp end
   for _, comp in ipairs(componentsOfType(eid, ctype, tag)) do
     if pred(comp) then push(comp) end
   end
@@ -29,7 +35,7 @@ function eachEntityComponent(eid, ctype, tag, func)
 end
 
 function eachEntityComponentWhere(eid, ctype, tag, pred, func)
-  for _, comp in componentsWhere(eid, ctype, tag, pred) do func(eid, comp) end
+  for _, comp in ipairs(componentsWhere(eid, ctype, tag, pred)) do func(eid, comp) end
 end
 
 function eachEntityComponentMatching(eid, ctype, tag, field, val, func)
@@ -85,6 +91,12 @@ function hasCompMatch(eid, ctype, tag, field, value)
   return firstComponentMatching(eid, ctype, tag, field, value) ~= nil
 end
 
+function cSum(t, comp, field) increment(t, field, cGet(comp, field)) end
+
+function cMerge(t, comp, field, l, s)
+  increment(t, field, asymmetricMerge(s, l, t[field], cGet(comp, field)))
+end
+
 function cGet(comp, field)
   return comp and ComponentGetValue2(comp, field)
 end
@@ -134,32 +146,39 @@ function dropStoredMatch(eid, name, val) removeMatch(eid, VSC, nil, name, val) e
 
 function dropStoredLike(eid, name, val) removeLike(eid, VSC, nil, name, val) end
 
--- vsc storage abstractions to make it kinda brainless
-local vscFields = { "name", "value_int", "value_string", "value_bool", "value_float" }
+-- vsc storage abstractions to make it kinda brainless - excludes name on purpose
+local vscFields = { "value_int", "value_string", "value_bool", "value_float" }
 
-function storedMatching(eid, name, specificField)
+---Returns value or vsc table
+---@param comp number|nil
+---@param isValueOnly boolean
+---@param specificField string
+---@return any|table
+function unboxVsc(comp, isValueOnly, specificField)
+  if isValueOnly then return cGet(comp, specificField) end
+  local t = {}
+  local function push(field) t[field] = cGet(comp, field) end
+  for _, field in ipairs(vscFields) do push(field) end
+  return t
+end
+
+function storedMatching(eid, name, isValueOnly, specificField)
   local vscs = {}
-  local function push(_, comp) vscs[#vscs+1] = unboxVsc(comp, specificField) end
+  local function push(_, comp) 
+    local v = unboxVsc(comp, isValueOnly, specificField)
+    vscs[#vscs + 1] = v
+  end
   eachEntityComponentMatching(eid, VSC, nil, "name", name, push)
   return vscs
 end
 
-function unboxVsc(comp, specificField)
-  local t = {}
-  local function push(field) t[field] = cGet(comp, field) end
-  for _, field in ipairs(vscFields) do
-    if not specificField or field == specificField then push(field) end
-  end
-  return t
+function firstStored(eid, name, isValueOnly, specificField)
+  return unboxVsc(firstComponentMatching(eid, VSC, nil, "name", name), isValueOnly, specificField)
 end
 
-function firstStored(eid, name, specificField)
-  return unboxVsc(firstComponentMatching(eid, VSC, nil, "name", name), specificField)
-end
-
-function storedsLike(eid, name, specificField)
+function storedsLike(eid, name, isValueOnly, specificField)
   local vscs = {}
-  local function push(_, comp) vscs[#vscs+1] = unboxVsc(comp, specificField) end
+  local function push(_, comp) vscs[#vscs + 1] = unboxVsc(comp, isValueOnly, specificField) end
   eachEntityComponentLike(eid, VSC, nil, "name", name, push)
   return vscs
 end
@@ -169,14 +188,11 @@ function storeInt(eid, name, val) store(eid, name, "value_int", val) end
 
 function storeFloat(eid, name, val) store(eid, name, "value_float", val) end
 
-function storedInt(eid, name) return storedMatching(eid, name, "value_int") end
+function storedInt(eid, name, isValueOnly) return firstStored(eid, name, isValueOnly, "value_int") end
 
-function storedInts(eid, name)
-  local vscs = storedMatching(eid, name, "value_int")
-  local arr = {}
-  for _, vsc in ipairs(vscs) do if vsc.value_int then arr[#arr+1] = vsc.value_int end end
-  return arr
-end
+function storedFloat(eid, name, isValueOnly) return firstStored(eid, name, isValueOnly, "value_float") end
+
+function storedIntsArray(eid, name) return storedMatching(eid, name, true, "value_int") end
 
 function clearOriginalStats(altar) removeLike(altar, VSC, nil, "name", originalStats) end
 

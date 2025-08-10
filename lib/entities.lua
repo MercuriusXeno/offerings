@@ -1,8 +1,8 @@
 --- Items and Entities Utils
 dofile_once("mods/offerings/lib/components.lua")
 
-local upperAltarTag = "offerings_upperAltar"
-local lowerAltarTag = "offerings_lowerAltar"
+local upperAltarTag = "offeringsUpperAltar"
+local lowerAltarTag = "offeringsLowerAltar"
 local altarLink = "linkedAltar"
 local itemLink = "linkedItem"
 local MIC = "MaterialInventoryComponent"
@@ -22,33 +22,19 @@ function isWand(eid) return EntityHasTag(eid, "wand") end
 
 function isWandEnhancer(eid) return isWand(eid) end
 
-function tabletValue(eid)
-    local value = 0
-    if EntityHasTag(eid, "normal_tablet") then value = 1 end
-    if EntityHasTag(eid, "forged_tablet") then value = 5 end
-    return value
-end
-
-function scrollValue(eid)
-    local value = 0
-    if EntityHasTag(eid, "scroll") then value = 1 end
-    if itemNameContains("book_s_") then value = 5 end
-    return value
-end
-
 function itemNameContains(eid, s) return hasCompLike(eid, "ItemComponent", nil, "item_name", s) end
 
 function itemNamed(eid, name) return hasCompMatch(eid, "ItemComponent", nil, "item_name", name) end
 
 function disableSimplePhysics(eid) disableAllComps(eid, "SimplePhysicsComponent") end
 
-function linkedItems(altar) return storedInts(altar, itemLink) end
+function linkedItems(altar) return storedIntsArray(altar, itemLink) end
 
-function linkedAltar(eid) return storedInt(eid, altarLink) end
+function linkedAltar(eid) return storedInt(eid, altarLink, true) end
 
-function linkedItemsWhere(altar, pred, ...)
+function linkedItemsWhere(altar, pred)
     local arr = {}
-    for _, c in linkedItems(altar) do if pred(c, ...) then table.insert(arr, c) end end
+    for _, c in linkedItems(altar) do if pred(altar, c) then arr[#arr+1] = c end end
     return arr
 end
 
@@ -78,10 +64,15 @@ function flasks(altar) return linkedItemsWhere(altar, isFlask) end
 
 function flaskEnhancers(altar) return linkedItemsWhere(altar, isFlaskEnhancer) end
 
-function target(altar) return #linkedItems(altar) > 0 and linkedItems(altar)[1] or 0 end
+function target(altar) return #linkedItems(altar) > 0 and linkedItems(altar)[1] or nil end
 
 function isLinked(altar, item)
-    return storedInt(altar, itemLink) == item and storedInt(item, altarLink) == altar
+    local isAltarItem = false
+    for _, i in ipairs(linkedItems(altar)) do
+        isAltarItem = isAltarItem or i == item
+        if isAltarItem then break end
+    end
+    return isAltarItem and storedInt(item, altarLink, true) == altar
 end
 
 function link(altar, item)

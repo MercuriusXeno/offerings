@@ -10,14 +10,8 @@ function take(_, altar, eid)
     local isUpper = isUpperAltar(altar)
     if isUpper then
         local lowerAltar = getLowerAltar(altar)
-        if isFlask(eid) then
-            setFlaskReactivity(altar, eid, lowerAltar)
-            setFlaskDamageModelsAndPhysicsBodyDamage(altar, eid, lowerAltar)
-        end
-
         local upperAltar = isUpper and altar or lowerAltar
         local target = target(upperAltar)
-
         local function destroyLowerAltarItems()
             local function destroyPredicate(offer)
                 if isWand(target) then return isWandEnhancer(offer) end
@@ -32,9 +26,7 @@ function take(_, altar, eid)
             end
             eachEntityWhere(linkedItems(lowerAltar), destroyPredicate, destroyFunction)
         end
-
         destroyLowerAltarItems()
-
         clearOriginalStats(altar)
     end
     handleAltarLink(altar, eid, false)

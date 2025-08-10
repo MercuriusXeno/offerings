@@ -3,4 +3,8 @@
         "lowercase-global"
     ],
     "Lua.runtime.version": "Lua 5.1",
+    "Lua.diagnostics.globals": [
+        "color_abgr_split",
+        "bit"
+    ],
 }

@@ -1,4 +1,4 @@
-<Entity tags="offer_altar">
+<Entity tags="offeringsLowerAltar">
   <Base file="mods/offerings/entity/base_altar.xml">
     <ParticleEmitterComponent
       image_animation_file="mods/offerings/entity/offer_altar_runes.png"
