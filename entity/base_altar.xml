@@ -1,8 +1,6 @@
-<Entity tags="workshop_altar">
-
+<Entity>
   <ParticleEmitterComponent
     _enabled="0"
-    _tags="item_effect"
     gravity.y="0.0"
     y_pos_offset_min="11"
     y_pos_offset_max="11"
@@ -26,12 +24,9 @@
     render_back="1"
     is_emitting="1"
   >
-  </ParticleEmitterComponent>
-
-  <!-- running this EVERY frame lets it intercept thrown potions more safely
-but it can be significantly slower than this (5-10 works great) -->
+  </ParticleEmitterComponent>  
   <LuaComponent
     execute_every_n_frame="1"
-    script_source_file="mods/offerings/scripts/altar_detection.lua">
+    script_source_file="mods/offerings/entity/scan.lua">
   </LuaComponent>
 </Entity>

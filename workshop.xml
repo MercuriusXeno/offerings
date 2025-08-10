@@ -2,7 +2,7 @@
     name="Offerings"
     description=""
     tags="gameplay,quality of life,tweaks"
-    dont_upload_folders=".git|xcf"
+    dont_upload_folders=".git|.vscode|xcf"
     dont_upload_files=".gitattributes|readme.txt|workshop_preview_image.png|workshop.xml|workshop_id.txt"
     >
 </Mod>
