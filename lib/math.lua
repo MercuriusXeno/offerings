@@ -1,0 +1,1 @@
+function round(d, p) return math.floor(d * 10 ^ p + 0.5) / 10 ^ p end

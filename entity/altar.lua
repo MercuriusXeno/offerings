@@ -7,7 +7,6 @@ dofile_once("mods/offerings/lib/wands.lua")
 dofile_once("mods/offerings/lib/logging.lua")
 
 local VSC = "VariableStorageComponent"
-local originalStats = "original_stats_"
 
 function take(_, altar, eid)
     local isUpper = isUpperAltar(altar)
@@ -38,20 +37,11 @@ function take(_, altar, eid)
 
         destroyLowerAltarItems()
 
-        -- remove the original stat buffer
-        removeLike(altar, VSC, nil, "name", originalStats)
+        clearOriginalStats(altar)
     end
     handleAltarLink(altar, eid, false)
     if not isUpper then updateResult(altar) end
 end
-
-function printItemStats(target, upperAltar, lowerAltar)
-    if isWand(target) then printWandStats(upperAltar, lowerAltar) end
-    if isFlask(target) then printFlaskStats(upperAltar, lowerAltar) end
-end
-
-function round(d, p) return math.floor(d * 10 ^ p + 0.5) / 10 ^ p end
-
 
 function updateResult(altar)
     -- find the offering altar
@@ -66,7 +56,7 @@ function updateResult(altar)
         local combined = combinedWands(upperAltar, lowerAltar)
         setWandResult(target, combined)
     elseif isFlask(target) then
-        Calculate_Flask_Stats(target, upperAltar, lowerAltar)
+        setFlaskResult(target, upperAltar, lowerAltar)
     end
     printItemStats(target, upperAltar, lowerAltar)
 end

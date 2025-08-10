@@ -46,7 +46,7 @@ local function scanForItems()
                 local isLinkingItem = isNewTarget or isValidOffer
 
                 if isNewTarget then
-                    if isWand(eid) then storeWandStats(altar, eid) end
+                    if isWand(eid) then memorizeWand(altar, eid) end
                     if isFlask(eid) then storeFlaskStats(altar, eid) end
                 end
 

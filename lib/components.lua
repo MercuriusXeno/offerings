@@ -1,4 +1,5 @@
 local VSC = "VariableStorageComponent"
+local originalStats = "original_stats_"
 
 function allComponents(eid, ctype, tag)
   return EntityGetComponentIncludingDisabled(eid, ctype, tag) or {}
@@ -17,8 +18,16 @@ function cGet(comp, field)
   return comp and ComponentGetValue2(comp, field)
 end
 
-function cObj(comp, obj, field)
+function cSet(comp, field, ...)
+  ComponentSetValue2(comp, field, ...)
+end
+
+function cObjGet(comp, obj, field)
   return comp and obj and ComponentObjectGetValue2(comp, obj, field)
+end
+
+function cObjSet(comp, obj, field, ...)
+  ComponentObjectSetValue2(comp, obj, field, ...)
 end
 
 function cMatch(comp, field, value)
@@ -113,6 +122,10 @@ end
 
 function storeBool(eid, name, val)
   EntityAddComponent2(eid, VSC, { name = name, value_bool = val })
+end
+
+function clearOriginalStats(altar)
+    removeLike(altar, VSC, nil, "name", originalStats)
 end
 
 function valueOrDefault(eid, ctype, var, default)

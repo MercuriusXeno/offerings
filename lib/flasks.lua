@@ -171,17 +171,14 @@ function Get_Level_Of_Flask_Enchantment(flask_id, enchantment_key)
     return 0
 end
 
---- Reserve the current flask state (materials, enchantments) on the altar
----@param altar_id integer
----@param flask_id integer
-function storeFlaskStats(altar_id, flask_id)
+function storeFlaskStats(altar, flask)
     -- clear old reservation
-    clearOriginalStats(altar_id)
+    clearOriginalStats(altar)
 
     -- reserve material contents
-    local materials = flaskMaterials(flask_id)
+    local materials = flaskMaterials(flask)
     for mat_id, amount in pairs(materials) do
-        EntityAddComponent2(altar_id, "VariableStorageComponent", {
+        EntityAddComponent2(altar, "VariableStorageComponent", {
             name = "reserved_material_" .. mat_id,
             value_string = mat_id,
             value_int = amount,
@@ -190,10 +187,10 @@ function storeFlaskStats(altar_id, flask_id)
     end
 
     -- reserve enchantments (and their levels)
-    for key, _ in pairs(flask_enchantments) do
-        local level = Get_Level_Of_Flask_Enchantment(flask_id, key)
+    for key, _ in pairs(enchants) do
+        local level = Get_Level_Of_Flask_Enchantment(flask, key)
         if level > 0 then
-            EntityAddComponent2(altar_id, "VariableStorageComponent", {
+            EntityAddComponent2(altar, "VariableStorageComponent", {
                 name = "reserved_enchant_" .. key,
                 value_int = level,
                 _tags = target_stat_buffer
@@ -202,26 +199,26 @@ function storeFlaskStats(altar_id, flask_id)
     end
 
     -- reserve capacity of original
-    local sucker_comp = EntityGetFirstComponentIncludingDisabled(flask_id, "MaterialSuckerComponent")
+    local sucker_comp = EntityGetFirstComponentIncludingDisabled(flask, "MaterialSuckerComponent")
     if sucker_comp then
         local capacity = ComponentGetValue2(sucker_comp, "barrel_size")
         local fill_rate = ComponentGetValue2(sucker_comp, "num_cells_sucked_per_frame")
-        EntityAddComponent2(altar_id, "VariableStorageComponent",
+        EntityAddComponent2(altar, "VariableStorageComponent",
             { name = "reserved_capacity", value_int = capacity, _tags = target_stat_buffer })
-        EntityAddComponent2(altar_id, "VariableStorageComponent",
+        EntityAddComponent2(altar, "VariableStorageComponent",
             { name = "reserved_fill_rate", value_int = fill_rate, _tags = target_stat_buffer })
     end
 
-    local potion_comp = EntityGetFirstComponentIncludingDisabled(flask_id, "PotionComponent")
+    local potion_comp = EntityGetFirstComponentIncludingDisabled(flask, "PotionComponent")
     if potion_comp then
         local spray_velocity_coeff = ComponentGetValue2(potion_comp, "spray_velocity_coeff")
         local spray_velocity_norm = ComponentGetValue2(potion_comp, "spray_velocity_normalized_min")
         local throw_how_many = ComponentGetValue2(potion_comp, "throw_how_many")
-        EntityAddComponent2(altar_id, "VariableStorageComponent",
+        EntityAddComponent2(altar, "VariableStorageComponent",
             { name = "reserved_spray_velocity_coeff", value_int = spray_velocity_coeff, _tags = target_stat_buffer })
-        EntityAddComponent2(altar_id, "VariableStorageComponent",
+        EntityAddComponent2(altar, "VariableStorageComponent",
             { name = "reserved_spray_velocity_norm", value_int = spray_velocity_norm, _tags = target_stat_buffer })
-        EntityAddComponent2(altar_id, "VariableStorageComponent",
+        EntityAddComponent2(altar, "VariableStorageComponent",
             { name = "reserved_throw_how_many", value_int = throw_how_many, _tags = target_stat_buffer })
     end
 end
@@ -274,25 +271,6 @@ function Get_Reserved_Flask_State(altar_id)
     }
 end
 
----Get and humanely display the combined stats of the result wand for debugging.
----@param target_altar_id any
----@param offer_altar_id any
-function printFlaskStats(target_altar_id, offer_altar_id)
-    local combined_stats = combinedFlasks(target_altar_id, offer_altar_id)
-    debugOut("Taking potion:")
-    for key, stat in pairs(combined_stats) do
-        if type(stat) == "table" then
-            debugOut(key .. " ")
-            for inner_key, item in pairs(stat) do
-                local name = key == "materials" and CellFactory_GetName(inner_key) or inner_key
-                debugOut(name .. " " .. tostring(item))
-            end
-        elseif type(stat) == "number" then
-            debugOut(key .. " " .. tostring(stat))
-        end
-    end
-end
-
 ---Combine reserved flask state with enchantment effects and merged flask contents.
 ---@param reserved table original attributes of the target flask
 ---@param offer_flasks integer[] the ids of the flasks being offered on the altar
@@ -339,7 +317,7 @@ function Combine_Flask_State(reserved, offer_flasks, offer_enhancers)
         end
 
         -- merge enchants,
-        for key, _ in pairs(flask_enchantments) do
+        for key, _ in pairs(enchants) do
             local flask_enchant_level = Get_Level_Of_Flask_Enchantment(flask_id, key)
             if flask_enchant_level > 0 then
                 enchantment_map[key] = (enchantment_map[key] or 0) + flask_enchant_level
@@ -370,7 +348,7 @@ function Combine_Flask_State(reserved, offer_flasks, offer_enhancers)
     end
 
     -- add enchantments from the items we've added on the altar.
-    for key, def in pairs(flask_enchantments) do
+    for key, def in pairs(enchants) do
         for _, item in ipairs(offer_enhancers) do
             if def.value(item) > 0 then
                 enchantment_map[key] = (enchantment_map[key] or 0) + def.value(item)
@@ -380,7 +358,7 @@ function Combine_Flask_State(reserved, offer_flasks, offer_enhancers)
 
     -- Negation pass: cancel out conflicting enchantments
     for key, enchantment_level in pairs(enchantment_map) do
-        local def = flask_enchantments[key]
+        local def = enchants[key]
         local inverse = def and def.negates
         if inverse and enchantment_map[inverse] then
             local other = enchantment_map[inverse]
@@ -401,7 +379,7 @@ function Combine_Flask_State(reserved, offer_flasks, offer_enhancers)
 
     -- throttle the max level
     for key, _ in pairs(enchantment_map) do
-        local def = flask_enchantments[key]
+        local def = enchants[key]
         enchantment_map[key] = math.min(def.max, enchantment_map[key] or 0)
     end
 
@@ -420,29 +398,19 @@ function Approach_Limit(result_stat, merge_stat, limit, step)
     return math.min(limit, result_stat + actual_step)
 end
 
----Apply the combined flask state to the given flask entity.
----@param flask_id integer
----@param combined table
-function Apply_Flask_State(flask_id, combined)
-    local comp = EntityGetFirstComponentIncludingDisabled(flask_id, "MaterialInventoryComponent")
-    if not comp then return end
-    debugOut("Applying combined state to flask on the target altar for updates")
-    -- Apply enchantments
-    for key, level in pairs(combined.enchantments or {}) do
-        local enchant = flask_enchantments[key]
-        debugOut("Enchant " .. key .. " " .. level)
-        if enchant and enchant.apply then enchant.apply(flask_id, level) end
-    end
+function setFlaskResult(target, upperAltar, lowerAltar)
+    local combined = combinedFlasks(upperAltar, lowerAltar)
+    local description = Create_Description_From_Stats(combined)
+    Set_Custom_Description(target, description)
+
+    for key, level in pairs(combined.enchantments or {}) do enchants[key].apply(target, level) end
+
+    local msc = firstComponent(target, MSC)
+    cSet(msc, "barrel_size", combined.capacity)
+    cSet(msc, "num_cells_sucked_per_frame", combined.fill_rate)
 
     -- Set combined capacity, warning, it's on a different component
-    local sucker_comp = EntityGetFirstComponentIncludingDisabled(flask_id, "MaterialSuckerComponent")
-    if sucker_comp then
-        ComponentSetValue2(sucker_comp, "barrel_size", combined.capacity)
-        ComponentSetValue2(sucker_comp, "num_cells_sucked_per_frame", combined.fill_rate)
-    end
-
-    -- Set combined capacity, warning, it's on a different component
-    local potion_comp = EntityGetFirstComponentIncludingDisabled(flask_id, "PotionComponent")
+    local potion_comp = EntityGetFirstComponentIncludingDisabled(target, "PotionComponent")
     if potion_comp then
         ComponentSetValue2(potion_comp, "spray_velocity_coeff", combined.spray_velocity_coeff)
         ComponentSetValue2(potion_comp, "spray_velocity_normalized_min", combined.spray_velocity_norm)
@@ -455,43 +423,34 @@ function Apply_Flask_State(flask_id, combined)
         end
     end
 
+    local mic = firstComponent(target, MIC)
     -- ONLY FOR THE TARGET TEMPORARILY PART 1
     -- render the flask inert temporarily because this is a bad time to do accident alchemy
-    ComponentSetValue2(comp, "do_reactions", 0)
-    ComponentSetValue2(comp, "reaction_speed", 0)
+    ComponentSetValue2(mic, "do_reactions", 0)
+    ComponentSetValue2(mic, "reaction_speed", 0)
 
     -- ONLY FOR THE TARGET TEMPORARILY PART 2
     -- make the flask immune to physics damage and other damage, is_static makes it shatter
-    local phys_comps = EntityGetComponentIncludingDisabled(flask_id, "PhysicsBodyCollisionDamageComponent") or {}
+    local phys_comps = EntityGetComponentIncludingDisabled(target, "PhysicsBodyCollisionDamageComponent") or {}
     for _, phys_comp in ipairs(phys_comps) do
         -- default is 0.016667 , set it to 0
         ComponentSetValue2(phys_comp, "damage_multiplier", 0.0)
     end
-    local damage_comps = EntityGetComponentIncludingDisabled(flask_id, "DamageModelComponent") or {}
+    local damage_comps = EntityGetComponentIncludingDisabled(target, "DamageModelComponent") or {}
     for _, damage_comp in ipairs(damage_comps) do
-        EntitySetComponentIsEnabled(flask_id, damage_comp, false)
+        EntitySetComponentIsEnabled(target, damage_comp, false)
     end
 
     -- this removes all material from the flask by design (empty material_name does it)
-    RemoveMaterialInventoryMaterial(flask_id)
+    RemoveMaterialInventoryMaterial(target)
 
     debugOut("building flask from reserved/combined state:")
     -- Add new materials
     for mat_id, amount in pairs(combined.materials or {}) do
         local material_type = CellFactory_GetName(mat_id)
         debugOut("Material: " .. material_type .. " x" .. amount)
-        AddMaterialInventoryMaterial(flask_id, material_type, amount)
+        AddMaterialInventoryMaterial(target, material_type, amount)
     end
-end
-
----@param target_flask_id integer
----@param target_altar_id integer
----@param offer_altar_id integer
-function Calculate_Flask_Stats(target_flask_id, target_altar_id, offer_altar_id)
-    local combined_stats = combinedFlasks(target_altar_id, offer_altar_id)
-    local description = Create_Description_From_Stats(combined_stats)
-    Set_Custom_Description(target_flask_id, description)
-    Apply_Flask_State(target_flask_id, combined_stats)
 end
 
 ---Return the combined stats of flasks and offered flasks, and enhancers.
@@ -510,7 +469,7 @@ end
 ---@param combined any
 function Create_Description_From_Stats(combined)
     local result = ""
-    for key, def in pairs(flask_enchantments) do
+    for key, def in pairs(enchants) do
         if combined.enchantments[key] and combined.enchantments[key] > 0 then
             local enchant_desc = def.describe(combined, key, combined.enchantments[key])
             result = Append_Description_Line(result, enchant_desc)
