@@ -14,7 +14,7 @@ local originalStats = "original_stats_"
 function og(def) return originalStats .. def.property end
 
 function combinedWands(upperAltar, lowerAltar)
-    local original = originalWand(upperAltar)
+    local original = originalWand(upperAltar) or {}
     local offeredWandsStats = offeringWandStats(lowerAltar)
 
     local combined = {}  -- final result
@@ -37,7 +37,7 @@ function combinedWands(upperAltar, lowerAltar)
         elseif def.formula == "loop" then
             final = loopBlend(values)
         end
-        combined[#combined + 1] = { def = def, value = round(final, 0) }
+        combined[#combined + 1] = { name = def, value = round(final, 0) }
     end
     return combined
 end
@@ -85,10 +85,7 @@ function memorizeWand(altar, wand)
 end
 
 function originalWand(altar)
-    local result = {}
-    local function push(comp) result[#result+1] = { name = cGet(comp, "name"), value = cGet(comp, "value_int")} end
-    eachEntityComponentLike(altar, VSC, nil, "name", originalStats, push)
-    return result
+    storedsLike(altar, "name", originalStats)
 end
 
 function wandStats(wand)

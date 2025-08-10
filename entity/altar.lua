@@ -6,8 +6,6 @@ dofile_once("mods/offerings/lib/flasks.lua")
 dofile_once("mods/offerings/lib/wands.lua")
 dofile_once("mods/offerings/lib/logging.lua")
 
-local VSC = "VariableStorageComponent"
-
 function take(_, altar, eid)
     local isUpper = isUpperAltar(altar)
     if isUpper then
@@ -44,27 +42,18 @@ function take(_, altar, eid)
 end
 
 function updateResult(altar)
-    -- find the offering altar
     local upperAltar = getUpperAltar(altar)
     local target = target(upperAltar)
-
     if not target then return end
-
-    -- determine if the recipe is a wand or flask
     local lowerAltar = getLowerAltar(altar)
     if isWand(target) then
-        local combined = combinedWands(upperAltar, lowerAltar)
-        setWandResult(target, combined)
+        setWandResult(target, combinedWands(upperAltar, lowerAltar))
     elseif isFlask(target) then
         setFlaskResult(target, upperAltar, lowerAltar)
     end
-    printItemStats(target, upperAltar, lowerAltar)
 end
 
----Stitch a line of the description onto the description unless it's the first line/entry.
----@param result any
----@param description_line string
-function Append_Description_Line(result, description_line)
+function appendDescription(result, description_line)
     if result then
         result = result .. "\n" .. description_line
     else
@@ -73,15 +62,8 @@ function Append_Description_Line(result, description_line)
     return result
 end
 
----Add custom verbiage to the name and description to improve QOL by giving important info.
----@param entity_id any
----@param description any
-function Set_Custom_Description(entity_id, description)
-    if description == "" then return end
-    debugOut("Setting description of result to " .. description)
-    -- Try to find an existing UIInfoComponent
-    local comp = EntityGetFirstComponentIncludingDisabled(entity_id, "ItemComponent")
-    if comp then
-        ComponentSetValue2(comp, "ui_description", description)
-    end
+function setDescription(eid, description)
+    if description == "" then return end    
+    local comp = firstComponent(eid, "ItemComponent")
+    cSet(comp, "ui_description", description)
 end

@@ -4,9 +4,6 @@ dofile_once("mods/offerings/lib/entities.lua")
 dofile_once("mods/offerings/lib/logging.lua")
 dofile_once("mods/offerings/entity/altar.lua")
 
--- component shorthand
-local LC = "LuaComponent"
-
 function entityIn(ex, ey, x, y, r, v) return ex >= x - r and ex <= x + r and ey >= y - v and ey <= y + v end
 
 function isOfferMatched(target, offer) return isWandMatch(target, offer) or isFlaskMatch(target, offer) end

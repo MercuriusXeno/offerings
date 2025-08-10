@@ -90,8 +90,8 @@ function link(altar, item)
 end
 
 function sever(altar, item)
-    dropInt(altar, itemLink, item)
-    dropInt(item, altarLink, altar)
+    dropStoredMatch(altar, itemLink, item)
+    dropStoredMatch(item, altarLink, altar)
 end
 
 function linkOrSever(altar, item, isLinking)
