@@ -33,15 +33,15 @@ function take(_, altar, eid)
     if not isUpper then updateResult(altar) end
 end
 
-function updateResult(altar)
+function updateResult(altar, isRestore)
     local upperAltar = getUpperAltar(altar)
     local target = target(upperAltar)
     if not target then return end
     local lowerAltar = getLowerAltar(altar)
     if isWand(target) then
-        setWandResult(target, combinedWands(upperAltar, lowerAltar))
+        setWandResult(target, combineWands(upperAltar, lowerAltar, isRestore))
     elseif isFlask(target) then
-        setFlaskResult(target, upperAltar, lowerAltar)
+        setFlaskResult(target, combineFlasks(upperAltar, lowerAltar, isRestore))
     end
 end
 

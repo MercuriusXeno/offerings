@@ -5,14 +5,12 @@ local upperAltarTag = "offeringsUpperAltar"
 local lowerAltarTag = "offeringsLowerAltar"
 local altarLink = "linkedAltar"
 local itemLink = "linkedItem"
-local MIC = "MaterialInventoryComponent"
+local VSC = "VariableStorageComponent"
 local IC = "ItemComponent"
 local LC = "LuaComponent"
 local SPC = "SimplePhysicsComponent"
 local SPEC = "SpriteParticleEmitterComponent"
 local PEC = "ParticleEmitterComponent"
-
-local wand_pickup_script = "data/scripts/particles/wand_pickup.lua"
 
 function isFlask(eid) return EntityHasTag(eid, "potion") or itemNamed(eid, "$item_cocktail") end
 
@@ -34,7 +32,7 @@ function linkedAltar(eid) return storedInt(eid, altarLink, true) end
 
 function linkedItemsWhere(altar, pred)
     local arr = {}
-    for _, c in linkedItems(altar) do if pred(altar, c) then arr[#arr+1] = c end end
+    for _, c in ipairs(linkedItems(altar)) do if pred(altar, c) then arr[#arr + 1] = c end end
     return arr
 end
 
@@ -72,7 +70,13 @@ function isLinked(altar, item)
         isAltarItem = isAltarItem or i == item
         if isAltarItem then break end
     end
-    return isAltarItem and storedInt(item, altarLink, true) == altar
+    -- if link is broken sever and return false
+    local isItemAltar = storedInt(item, altarLink, true) == altar
+    if (isItemAltar ~= isAltarItem) then
+        sever(altar, item)
+        return false
+    end
+    return isItemAltar and isAltarItem
 end
 
 function link(altar, item)
@@ -81,8 +85,16 @@ function link(altar, item)
 end
 
 function sever(altar, item)
-    dropStoredMatch(altar, itemLink, item)
-    dropStoredMatch(item, altarLink, altar)
+    local function hasItemLink(comp)
+        return cGet(comp, "name") == itemLink
+            and cGet(comp, "value_int") == item
+    end
+    removeEntityComponentWhere(altar, VSC, nil, hasItemLink)
+    local function hasAltarLink(comp)
+        return cGet(comp, "name") == altarLink
+            and cGet(comp, "value_int") == altar
+    end
+    removeEntityComponentWhere(item, VSC, nil, hasAltarLink)
 end
 
 function linkOrSever(altar, item, isLinking)
@@ -96,6 +108,29 @@ end
 function eachEntityWhere(eids, pred, func)
     for _, eid in ipairs(eids) do if pred(eid) then func(eid) end end
 end
+
+local pickupLua = "script_item_picked_up"
+local pickupFlask = {
+    execute_every_n_frame = 1,
+    execute_times = 0,
+    limit_how_many_times_per_frame = -1,
+    limit_to_every_n_frame = -1,
+    remove_after_executed = true,
+    script_item_picked_up = "data/scripts/items/potion_effect.lua",
+    mLastExecutionFrame = -1,
+    mTimesExecutedThisFrame = 0
+}
+
+local pickupWand = {
+    execute_every_n_frame = 1,
+    execute_times = 0,
+    limit_how_many_times_per_frame = -1,
+    limit_to_every_n_frame = -1,
+    remove_after_executed = true,
+    script_item_picked_up = "data/scripts/particles/wand_pickup.lua",
+    mLastExecutionFrame = -1,
+    mTimesExecutedThisFrame = 0
+}
 
 ---Handle linking and unlinking items from an altar, setting and reversing various things.
 function handleAltarLink(altar, isUpper, eid, isLinked, x, y, ex, ey)
@@ -115,9 +150,17 @@ function handleAltarLink(altar, isUpper, eid, isLinked, x, y, ex, ey)
         -- immobilize wands
         eachComponentSet(eid, IC, nil, "play_hover_animation", not isLinked)
         eachComponentSet(eid, IC, nil, "play_spinning_animation", not isLinked)
-        toggleCompsLike(eid, SPC, nil, not isLinked)
-        -- make pickup fancy
-        enableFirstCompLike(eid, LC, nil, "script_item_picked_up", wand_pickup_script)
+        toggleComps(eid, SPC, nil, not isLinked)
+    end
+
+    -- re-enables the first time pickup particles, which are fancy
+    if isUpper then
+        local pickup = isWand(eid) and pickupWand or pickupFlask
+        if isLinked and not hasCompMatch(eid, LC, nil, pickupLua, pickup[pickupLua]) then
+            EntityAddComponent2(eid, LC, pickup)
+        else
+            toggleFirstCompMatching(eid, LC, nil, pickupLua, pickup[pickupLua], isLinked)
+        end
     end
 
     -- handle adding or removing item from the altar children
@@ -127,10 +170,5 @@ function handleAltarLink(altar, isUpper, eid, isLinked, x, y, ex, ey)
     eachComponentSet(eid, SPEC, nil, "velocity_always_away_from_center", isLinked)
 
     -- enable the altar rune particle emitter if it has any children
-    toggleComps(altar, PEC, #linkedItems(altar) > 0)
-
-    -- disable the altar scan algorithm if it's the upper altar and has a child
-    if isUpper(altar) and #linkedItems(altar) > 0 then
-        disableFirstCompLike(altar, LC, "script_source_file", "mods/offerings/entity/scan.lua")
-    end
+    toggleComps(altar, PEC, nil, #linkedItems(altar) > 0)
 end

@@ -48,8 +48,12 @@ function eachEntityComponentLike(eid, ctype, tag, field, val, func)
   eachEntityComponentWhere(eid, ctype, tag, pred, func)
 end
 
-function removeAny(eid, ctype, tag)
+function removeAll(eid, ctype, tag)
   eachEntityComponent(eid, ctype, tag, EntityRemoveComponent)
+end
+
+function removeEntityComponentWhere(eid, ctype, tag, pred)
+  eachEntityComponentWhere(eid, ctype, tag, pred, EntityRemoveComponent)
 end
 
 function removeMatch(eid, ctype, tag, field, val)
@@ -60,8 +64,17 @@ function removeLike(eid, ctype, tag, field, val)
   eachEntityComponentLike(eid, ctype, tag, field, val, EntityRemoveComponent)
 end
 
+---Returns the first component matching ctype with tag, optional
+---@param eid number
+---@param ctype string
+---@param tag? string|nil
+---@return number
 function firstComponent(eid, ctype, tag)
-  return EntityGetFirstComponentIncludingDisabled(eid, ctype, tag)
+  if tag == nil then
+    return EntityGetFirstComponentIncludingDisabled(eid, ctype) or 0
+  else
+    return EntityGetFirstComponentIncludingDisabled(eid, ctype, tag) or 0
+  end
 end
 
 function firstComponentWhere(eid, ctype, tag, func)
@@ -90,6 +103,25 @@ end
 function hasCompMatch(eid, ctype, tag, field, value)
   return firstComponentMatching(eid, ctype, tag, field, value) ~= nil
 end
+
+function toggleComp(eid, comp, isEnabled)
+  if comp then EntitySetComponentIsEnabled(eid, comp, isEnabled) end
+end
+
+function toggleFirstCompMatching(eid, ctype, tag, field, value, isEnabled)
+  toggleComp(eid, firstComponentMatching(eid, ctype, tag, field, value), isEnabled)
+end
+
+function toggleComps(eid, ctype, tag, isEnabled)
+  local function flip(e, comp)
+    toggleComp(e, comp, isEnabled)
+  end
+  eachEntityComponent(eid, ctype, tag, flip)
+end
+
+function disableAllComps(eid, ctype, tag) toggleComps(eid, ctype, tag, false) end
+
+function enableAllComps(eid, ctype, tag) toggleComps(eid, ctype, tag, true) end
 
 function cSum(t, comp, field) increment(t, field, cGet(comp, field)) end
 
@@ -142,9 +174,7 @@ function store(eid, name, ...)
   EntityAddComponent2(eid, VSC, vsc)
 end
 
-function dropStoredMatch(eid, name, val) removeMatch(eid, VSC, nil, name, val) end
-
-function dropStoredLike(eid, name, val) removeLike(eid, VSC, nil, name, val) end
+function dropStoredLike(eid, field, val) removeLike(eid, VSC, nil, field, val) end
 
 -- vsc storage abstractions to make it kinda brainless - excludes name on purpose
 local vscFields = { "value_int", "value_string", "value_bool", "value_float" }
@@ -158,13 +188,14 @@ function unboxVsc(comp, isValueOnly, specificField)
   if isValueOnly then return cGet(comp, specificField) end
   local t = {}
   local function push(field) t[field] = cGet(comp, field) end
+  push("name") -- always push name!
   for _, field in ipairs(vscFields) do push(field) end
   return t
 end
 
 function storedMatching(eid, name, isValueOnly, specificField)
   local vscs = {}
-  local function push(_, comp) 
+  local function push(_, comp)
     local v = unboxVsc(comp, isValueOnly, specificField)
     vscs[#vscs + 1] = v
   end
@@ -176,9 +207,15 @@ function firstStored(eid, name, isValueOnly, specificField)
   return unboxVsc(firstComponentMatching(eid, VSC, nil, "name", name), isValueOnly, specificField)
 end
 
-function storedsLike(eid, name, isValueOnly, specificField)
+function storedsLike(eid, name, isValueOnly, specificField, isSkippingZero)
   local vscs = {}
-  local function push(_, comp) vscs[#vscs + 1] = unboxVsc(comp, isValueOnly, specificField) end
+  local function push(_, comp)
+    debugOut("pushing vscs of comp " .. comp)
+    local vsc = unboxVsc(comp, isValueOnly, specificField)
+    if not isSkippingZero or (specificField ~= nil and vsc[specificField] ~= 0) then
+      vscs[#vscs + 1] = vsc
+    end
+  end
   eachEntityComponentLike(eid, VSC, nil, "name", name, push)
   return vscs
 end
@@ -201,25 +238,3 @@ function valueOrDefault(eid, ctype, field, default)
   if comp then return ComponentGetValue2(comp, field) end
   return default
 end
-
-function toggleComp(eid, comp, isEnabled) EntitySetComponentIsEnabled(eid, comp, isEnabled) end
-
-function toggleComps(eid, comps, isEnabled)
-  for _, comp in ipairs(comps) do toggleComp(eid, comp, isEnabled) end
-end
-
-function disableFirstCompLike(eid, ctype, tag, field, value)
-  toggleComp(eid, firstComponentMatching(eid, ctype, tag, field, value), false)
-end
-
-function enableFirstCompLike(eid, ctype, tag, field, value)
-  toggleComp(eid, firstComponentMatching(eid, ctype, tag, field, value), false)
-end
-
-function toggleCompsLike(eid, ctype, tag, isEnabled)
-  toggleComps(eid, componentsOfType(eid, ctype, tag), isEnabled)
-end
-
-function disableAllComps(eid, ctype, tag) toggleCompsLike(eid, ctype, tag, false) end
-
-function enableAllComps(eid, ctype, tag) toggleCompsLike(eid, ctype, tag, true) end

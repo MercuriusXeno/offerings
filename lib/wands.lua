@@ -3,23 +3,27 @@ dofile_once("mods/offerings/lib/math.lua")
 --== WAND MERGING ==--
 local wandStatDefs = {
     { prop = "fire_rate_wait",    obj = "gunaction_config", formula = "min" },
-    { property = "reload_time",       object = "gun_config",       formula = "min" },
-    { property = "spread_degrees",    object = "gunaction_config", formula = "min" },
-    { property = "deck_capacity",     object = "gun_config",       formula = "max" },
-    { property = "mana_max",          object = nil,                formula = "loop" },
-    { property = "mana_charge_speed", object = nil,                formula = "loop" }
+    { prop = "reload_time",       obj = "gun_config",       formula = "min" },
+    { prop = "spread_degrees",    obj = "gunaction_config", formula = "min" },
+    { prop = "deck_capacity",     obj = "gun_config",       formula = "max" },
+    { prop = "mana_max",          obj = nil,                formula = "loop" },
+    { prop = "mana_charge_speed", obj = nil,                formula = "loop" }
 }
 local VSC = "VariableStorageComponent"
 local originalStats = "original_stats_"
-function og(def) return originalStats .. def.property end
+function og(def) return originalStats .. def.prop end
 
-function combinedWands(upperAltar, lowerAltar)
-    local original = originalWand(upperAltar) or {}
-    local offeredWandsStats = offeringWandStats(lowerAltar)
+function combineWands(upperAltar, lowerAltar, isRestore)
+    local original = originalWand(upperAltar)
+    
+    local offeredWandsStats = isRestore and {} or offeringWandStats(lowerAltar)
 
     local combined = {}  -- final result
     local clustered = {} -- clustered by name for loop formulas
-    for _, stat in ipairs(original) do clustered[stat.name] = { stat.value_int } end
+    for _, stat in ipairs(original) do
+        debugOut("wand original " .. stat.name .. " set to " .. stat.value_int)
+        table.insert(clustered[stat.name], { stat.value_int })
+    end
 
     for _, wandStats in ipairs(offeredWandsStats) do
         for _, stat in ipairs(wandStats) do
@@ -30,13 +34,21 @@ function combinedWands(upperAltar, lowerAltar)
     for _, def in ipairs(wandStatDefs) do
         local values = clustered[def.prop] or {}
         local final = def.formula == "min" and math.huge or -math.huge
+        debugOut("wand stats in clustered props " .. def.prop)
         if def.formula == "min" then
-            for _, v in ipairs(values) do final = math.min(final, v) end
+            for i, v in ipairs(values) do
+                final = math.min(final, v)
+                debugOut(i .. ". " .. v)
+            end
         elseif def.formula == "max" then
-            for _, v in ipairs(values) do final = math.max(final, v) end
+            for i, v in ipairs(values) do
+                final = math.max(final, v)
+                debugOut(i .. ". " .. v)
+            end
         elseif def.formula == "loop" then
             final = loopBlend(values)
         end
+        debugOut("Result: " .. final)
         combined[#combined + 1] = { name = def, value = round(final, 0) }
     end
     return combined
@@ -62,15 +74,18 @@ function loopBlend(values)
     return pool[1]
 end
 
-function abilityComponent(wand) return firstComponent(wand, "AbilityComponent") end
+function abilityComponent(wand) return firstComponent(wand, "AbilityComponent", nil) end
 
 function setWandResult(wand, combined)
     local ability = abilityComponent(wand)
     for _, entry in ipairs(combined) do
         for _, def in ipairs(wandStatDefs) do
             if def.prop == entry.name then
-                if def.obj then cObjSet(ability, def.obj, entry.name, entry.value)
-                else cSet(ability, entry.name, entry.value) end
+                if def.obj then
+                    cObjSet(ability, def.obj, entry.name, entry.value)
+                else
+                    cSet(ability, entry.name, entry.value)
+                end
                 break
             end
         end
@@ -85,13 +100,14 @@ function memorizeWand(altar, wand)
 end
 
 function originalWand(altar)
-    storedsLike(altar, "name", originalStats)
+    storedsLike(altar, "name", false, originalStats, false)
 end
 
 function wandStats(wand)
     local ability = abilityComponent(wand)
     local result = {}
     for _, def in ipairs(wandStatDefs) do
+        debugOut("scraping stats from " .. def.prop)
         local value = def.obj and cObjGet(ability, def.obj, def.prop) or cGet(ability, def.prop)
         result[#result + 1] = { def = def, val = value }
     end

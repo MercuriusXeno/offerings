@@ -12,7 +12,7 @@ local PBCDC = "PhysicsBodyCollisionDamageComponent"
 local locPrefix = "$offerings_"
 local barrelSizeLoc = locPrefix .. "barrel_size"
 --this seems more balanced than taking .5% of the barrel size.
-local reactivitySpeedBaseExp = (math.log(5) / math.log(1000))
+local reactSpeedExp = (math.log(5) / math.log(1000))
 local originalStats = "original_stats_"
 local function unprefix(s, n) return s:sub(n + 1) end
 
@@ -28,7 +28,13 @@ local function prefEnch(s) return prefOg("enchant_" .. s) end
 local ENCH = #prefEnch("")
 local function unprefEnch(s) return unprefix(s, ENCH) end
 
-function flaskMaterials(eid) return isFlask(eid) and cGet(firstComponent(eid, MIC), "count_per_material_type") or {} end
+function flaskMaterials(eid)
+    if isFlask(eid) then
+        local comp = firstComponent(eid, MIC)
+        return cGet(comp, "count_per_material_type")
+    end
+    return {}
+end
 
 -- list of enchantments of flasks and their detection item
 local enchants = {}
@@ -88,7 +94,7 @@ function potionMimicValue(eid) return itemNamed(eid, "$item_potion_mimic") and 1
 
 function waterstoneValue(eid) return EntityHasTag(eid, "waterstone") and 1 or 0 end
 
-function removeDamageModels(eid) removeAny(eid, "DamageModelComponent") end
+function removeDamageModels(eid) removeAll(eid, "DamageModelComponent") end
 
 function makeReactive(eid, level)
     eachComponentSet(eid, MIC, nil, "reaction_rate", math.max(0, math.min(20 + (level * 20), 100)))
@@ -159,13 +165,56 @@ function describeFlask(combined)
 end
 
 function enchantLevel(eid, key)
-    return cGet(firstComponentMatching(eid, VSC, nil, "name", enchantPrefix .. key), "value_int")
+    return cGet(firstComponentMatching(eid, VSC, nil, "name", enchantPrefix .. key), "value_int") or 0
+end
+
+function materialize(vscs, unpref, isMaterialOffset)
+end
+
+function materializeMaterials(vscs)
+    local t = {}
+    local function push(vsc)
+        -- 0 based offset has to be offset for materials, specifically
+        local matId = tonumber(unprefMat(vsc.name) - 1)
+        if not matId then return end
+        if vsc.value_int ~= 0 then t[matId] = vsc.value_int end
+    end
+    each(vscs, push)
+    return t
+end
+
+function materializeEnchants(vscs)
+    local t = {}
+    local function push(vsc)
+        if vsc.value_int ~= 0 then t[unprefEnch(vsc.name)] = vsc.value_int end
+    end
+    each(vscs, push)
+    return t
+end
+
+function originalFlask(altar)
+    return {
+        materials = materializeMaterials(storedsLike(altar, prefMat(""), false, "value_int", true)),
+        enchantments = materializeEnchants(storedsLike(altar, prefEnch(""), false, "value_int", true)),
+        barrel_size = storedInt(altar, prefOg("barrel_size"), true),
+        num_cells_sucked_per_frame = storedInt(altar, prefOg("num_cells_sucked_per_frame"), true),
+        spray_velocity_coeff = storedFloat(altar, prefOg("spray_velocity_coeff"), true),
+        spray_velocity_normalized_min = storedFloat(altar, prefOg("spray_velocity_normalized_min"), true),
+        throw_how_many = storedInt(altar, prefOg("throw_how_many"), true)
+    }
 end
 
 function storeFlaskStats(altar, eid)
     clearOriginalStats(altar)
-    for matId, amount in pairs(flaskMaterials(eid)) do storeInt(altar, prefMat(matId), amount) end
-    for key, _ in pairs(enchants) do storeInt(altar, prefEnch(key), enchantLevel(eid, key)) end
+    local function pushMat(matId, amount) if amount > 0 then storeInt(altar, prefMat(matId), amount) end end
+    for matId, amount in pairs(flaskMaterials(eid)) do pushMat(matId, amount) end
+    local function pushEnch(key, level)
+        if level ~= 0 then
+            debugOut(" enchant " .. key .. " is level " .. level .. " so we are storing the int!")
+            storeInt(altar, prefEnch(key), level)
+        end
+    end
+    for key, _ in pairs(enchants) do pushEnch(key, enchantLevel(eid, key)) end
     local msc = firstComponent(eid, MSC)
     storeInt(altar, prefOg("num_cells_sucked_per_frame"), cGet(msc, "num_cells_sucked_per_frame"))
     storeInt(altar, prefOg("barrel_size"), cGet(msc, "barrel_size"))
@@ -175,42 +224,22 @@ function storeFlaskStats(altar, eid)
     storeInt(altar, prefOg("throw_how_many"), cGet(potion, "throw_how_many"))
 end
 
----stored vsc int arrays don't look like the MIC material
----vectors (or enchantment kvps), so we mutate them manually
-function materialize(vscs)
-    local t = {}
-    local function push(vsc) t[unprefMat(vsc.name)] = vsc.value_int end
-    each(vscs, push)
-    return t
-end
-
-function originalFlask(altar)
-    return {
-        materials = materialize(storedsLike(altar, prefMat(""), false, "value_int")),
-        enchantments = materialize(storedsLike(altar, prefEnch(""), false, "value_int")),
-        barrel_size = storedInt(altar, prefOg("barrel_size"), true),
-        num_cells_sucked_per_frame = storedInt(altar, prefOg("num_cells_sucked_per_frame"), true),
-        spray_velocity_coeff = storedFloat(altar, prefOg("spray_velocity_coeff"), true),
-        spray_velocity_normalized_min = storedFloat(altar, prefOg("spray_velocity_normalized_min"), true),
-        throw_how_many = storedInt(altar, prefOg("throw_how_many"), true)
-    }
-end
-
 function reactivity(c)
+    local level = c.enchantments.reactive or 0
     return {
-        chance = 20 + (c.enchantments.reactive * 20),
-        speed = math.floor(c.barrel_size ^ reactivitySpeedBaseExp) * (c.enchantments.reactive + 1)
+        chance = 20 + (level * 20),
+        speed = math.floor(c.barrel_size ^ reactSpeedExp) * (level + 1)
     }
 end
 
-function combineFlasks(upperAltar, lowerAltar)
+function combineFlasks(upperAltar, lowerAltar, isRestore)
     local t = originalFlask(upperAltar)
-    local offered = flaskEnhancers(lowerAltar)
+    local offered = isRestore and {} or flaskEnhancers(lowerAltar)
     for _, offer in ipairs(offered) do
         if isFlask(offer) then
-            local function pushMat(k, v) t.materials[k] = (t.materials[k] or 0) + v end
+            local function pushMat(k, v) if v > 0 then increment(t.materials, prefMat(k), v) end end
             for matId, amount in pairs(flaskMaterials(offer)) do pushMat(matId, amount) end
-            local function pushEnch(k, v) increment(t.enchantments, k, v) end
+            local function pushEnch(k, v) if v ~= 0 then increment(t.enchantments, k, v) end end
             for k, _ in pairs(enchants) do pushEnch(k, enchantLevel(offer, k)) end
             local msc = firstComponent(offer, MSC)
             cSum(t, msc, "barrel_size")
@@ -227,24 +256,24 @@ function combineFlasks(upperAltar, lowerAltar)
 
     -- clamp lower and upper bounds
     local function clamp(k, d) t.enchantments[k] = math.min(d.max, math.max(d.min, t.enchantments[k])) end
-    for key, def in pairs(enchants) do clamp(key, def) end
+    for key, def in pairs(enchants) do if t.enchantments[key] then clamp(key, def) end end
 
     return t
 end
 
-function setFlaskReactivity(flask, reactivity)    
+function setFlaskReactivity(flask, reactivity)
     local comp = firstComponent(flask, MIC)
     cSet(comp, "do_reactions", reactivity.chance)
     cSet(comp, "reaction_speed", reactivity.speed)
 end
 
-function setFlaskDamageModelsAndPhysicsBodyDamage(flask, temperedLevel)
-    eachComponentSet(flask, PBCDC, nil, "damage_multiplier", (1 - temperedLevel) * 0.016667)
-    toggleComps(flask, "DamageModelComponent", temperedLevel == 0)
+function setFlaskDamageModelsAndPhysicsBodyDamage(flask, combined)
+    local tempered = combined.enchantments.tempered or 0
+    eachComponentSet(flask, PBCDC, nil, "damage_multiplier", (1 - tempered) * 0.016667)
+    toggleComps(flask, "DamageModelComponent", nil, tempered == 0)
 end
 
-function setFlaskResult(flask, upperAltar, lowerAltar)
-    local combined = combineFlasks(upperAltar, lowerAltar)
+function setFlaskResult(flask, combined)
     setDescription(flask, describeFlask(combined))
     for key, level in pairs(combined.enchantments or {}) do enchants[key].apply(flask, level) end
     local msc = firstComponent(flask, MSC)
@@ -259,7 +288,7 @@ function setFlaskResult(flask, upperAltar, lowerAltar)
     if combined.barrel_size > 10000 then cSet(potion, "throw_bunch", true) end
     local reactivity = reactivity(combined)
     setFlaskReactivity(flask, reactivity)
-    setFlaskDamageModelsAndPhysicsBodyDamage(flask, combined.enchantments.tempered)
+    setFlaskDamageModelsAndPhysicsBodyDamage(flask, combined)
     -- build the material component by first clearing it
     RemoveMaterialInventoryMaterial(flask)
     local function push(k, v) AddMaterialInventoryMaterial(flask, CellFactory_GetName(k), v) end
