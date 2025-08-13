@@ -210,7 +210,6 @@ end
 function storedsLike(eid, name, isValueOnly, specificField, isSkippingZero)
   local vscs = {}
   local function push(_, comp)
-    debugOut("pushing vscs of comp " .. comp)
     local vsc = unboxVsc(comp, isValueOnly, specificField)
     if not isSkippingZero or (specificField ~= nil and vsc[specificField] ~= 0) then
       vscs[#vscs + 1] = vsc

@@ -12,17 +12,35 @@ local wandStatDefs = {
 local VSC = "VariableStorageComponent"
 local originalStats = "original_stats_"
 function og(def) return originalStats .. def.prop end
+local function prefOg(s) return originalStats .. s end
+local OG = #prefOg("")
+local function unprefix(s, n) return s:sub(n + 1) end
+local function unprefOg(s) return unprefix(s, OG) end
 
 function combineWands(upperAltar, lowerAltar, isRestore)
+    debugOut("is restoring og wand? " .. tostring(isRestore))
     local original = originalWand(upperAltar)
-    
+    if not original then return {} end
+
     local offeredWandsStats = isRestore and {} or offeringWandStats(lowerAltar)
 
     local combined = {}  -- final result
     local clustered = {} -- clustered by name for loop formulas
     for _, stat in ipairs(original) do
-        debugOut("wand original " .. stat.name .. " set to " .. stat.value_int)
-        table.insert(clustered[stat.name], { stat.value_int })
+        local unprefName = unprefOg(stat.name)
+        if clustered[unprefName] == nil then clustered[unprefName] = {} end
+        table.insert(clustered[unprefName], stat.value_int)
+    end
+
+    for key, value in pairs(clustered) do
+        debugOut(key .. " of cluster values")
+        if type(value) == "table" then
+            for i, v in ipairs(value) do
+                debugOut("item " .. i .. " " .. tostring(v))
+            end
+        else
+            debugOut(key .. " is not a table?!")
+        end
     end
 
     for _, wandStats in ipairs(offeredWandsStats) do
@@ -94,28 +112,28 @@ end
 
 function memorizeWand(altar, wand)
     clearOriginalStats(altar)
-    for _, stat in ipairs(wandStats(wand)) do
-        storeInt(altar, stat.name, stat.value_int)
+    for _, stat in ipairs(scrapeWandStats(wand)) do
+        storeInt(altar, originalStats .. stat.name, stat.value_int)
     end
 end
 
 function originalWand(altar)
-    storedsLike(altar, "name", false, originalStats, false)
+    return storedsLike(altar, originalStats, false, "value_int", false)
 end
 
-function wandStats(wand)
+function scrapeWandStats(wand)
     local ability = abilityComponent(wand)
     local result = {}
     for _, def in ipairs(wandStatDefs) do
-        debugOut("scraping stats from " .. def.prop)
-        local value = def.obj and cObjGet(ability, def.obj, def.prop) or cGet(ability, def.prop)
-        result[#result + 1] = { def = def, val = value }
+        local innerObj = def.obj ~= nil and def.obj or "root"
+        local value = innerObj ~= "root" and cObjGet(ability, def.obj, def.prop) or cGet(ability, def.prop)
+        result[#result + 1] = { name = def.prop, value_int = value }
     end
     return result
 end
 
 function offeringWandStats(lowerAltar)
     local stats = {}
-    for _, wand in ipairs(wands(lowerAltar)) do stats[#stats + 1] = wandStats(wand) end
+    for _, wand in ipairs(wands(lowerAltar)) do stats[#stats + 1] = scrapeWandStats(wand) end
     return stats
 end

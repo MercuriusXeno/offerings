@@ -12,7 +12,10 @@ function isWandMatch(target, offer) return isWand(target) and isWandEnhancer(off
 
 function isFlaskMatch(target, offer) return isFlask(target) and isFlaskEnhancer(offer) end
 
-function isLinkableItem(eid) return not isAltar(eid) and not isInventory(eid) end
+function isLinkableItem(eid)
+    return not isAltar(eid) and (isWandEnhancer(eid) or isFlaskEnhancer(eid))
+        and not isInventory(eid) and EntityGetParent(eid) == 0
+end
 
 function isValidTarget(eid) return isLinkableItem(eid) and (isWand(eid) or isFlask(eid)) end
 
@@ -27,53 +30,61 @@ local function scanForItems()
     local radius = isUpper and 13 or 38
     local x, y = EntityGetTransform(altar)
     local entities = EntityGetInRadius(x, y, radius)
-    local isNewTarget = isUpper and not target
+    local isNewTarget = isUpper and target == nil
     local hasUpdates = false
     local lostTarget = false
     local existingLinks = linkedItems(altar)
     local seen = {}
     for _, l in ipairs(existingLinks) do seen[l] = false end
     for _, eid in ipairs(entities) do
-        if seen[eid] == false then seen[eid] = true end
-        local wasLinked = isLinked(altar, eid)
-        local isNowLinked = wasLinked
         local isLinkableItem = isLinkableItem(eid)
-        local ex, ey = EntityGetTransform(eid)
-        local h = ((ex - x) ^ 2 + (ey - y) ^ 2) ^ 0.5
-        if wasLinked then
-            -- sever connections where the item is too far or the target is lost
-            -- so the offerings no longer count as valid. losing target also drops
-            -- stored memory of the original wand
-            if h > radius or (not isUpper and not target) or not isLinkableItem then isNowLinked = false end
-        else
-            local isValidUpper = isNewTarget and isValidTarget(eid)
-            local isValidLower = not isUpper and target ~= nil and isValidOffer(target, eid)
-            isNowLinked = isLinkableItem and (isValidUpper or isValidLower) and entityIn(ex, ey, x, y, radius, 5)
-        end
-        if isNowLinked ~= wasLinked then
-            handleAltarLink(altar, isUpper, eid, isNowLinked, x, y, ex, ey)
-            if isNewTarget then
-                debugOut("memorizing target")
-                if isWand(eid) then memorizeWand(altar, eid) end
-                if isFlask(eid) then storeFlaskStats(altar, eid) end
+        if isLinkableItem then
+            if seen[eid] == false then seen[eid] = true end
+            local wasLinked = isLinked(altar, eid)
+            local isNowLinked = wasLinked
+            local ex, ey = EntityGetTransform(eid)
+            local h = ((ex - x) ^ 2 + (ey - y) ^ 2) ^ 0.5
+            if wasLinked then
+                if h > radius or (not isUpper and not target) or not isLinkableItem then
+                    debugOut("distance of item " .. h .. " or some other factor caused breakage")
+                    isNowLinked = false
+                end
+            else
+                local isValidUpper = isNewTarget and isValidTarget(eid)
+                local isValidLower = not isUpper and target ~= nil and isValidOffer(target, eid)
+                isNowLinked = isLinkableItem and (isValidUpper or isValidLower) and entityIn(ex, ey, x, y, radius, 5)
             end
-            hasUpdates = true
-            lostTarget = wasLinked and isUpper
+            if isNowLinked ~= wasLinked then
+                debugOut("handle altar link ("  .. tostring(isNowLinked) .. ") firing for altar " ..
+                altar .. " is upper? " .. tostring(isUpper) .. " for item " .. eid)
+                handleAltarLink(altar, isUpper, eid, isNowLinked, x, y, ex, ey)
+                if isNewTarget then
+                    if isWand(eid) then memorizeWand(altar, eid) end
+                    if isFlask(eid) then storeFlaskStats(altar, eid) end
+                end
+                hasUpdates = true
+                lostTarget = wasLinked and isUpper
+            end
         end
     end
-    -- sever missing connections
     for eid, isSeen in pairs(seen) do
         if not isSeen then
-            debugOut("altar is missing item connection " .. eid)
             handleAltarLink(altar, isUpper, eid, false, x, y, 0, 0)
             lostTarget = lostTarget or isUpper
+            debugOut("game thinks the item " .. eid .. " is missing and thus updating")
             hasUpdates = true
         end
+    end
+    if lostTarget then
+        clearOriginalStats(altar)
+        hasUpdates = true
     end
     -- losing the target means it fetched loose from
     -- the altar and we need to restore its original stats
-    if hasUpdates then updateResult(altar, lostTarget) end
-    if lostTarget then clearOriginalStats(altar) end
+    if hasUpdates then
+        debugOut("game thinks the item has updates on altar " .. altar .. " and target lost is " .. tostring(lostTarget))
+        updateResult(altar, lostTarget)
+    end
 end
 
 scanForItems()

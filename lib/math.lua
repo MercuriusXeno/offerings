@@ -16,3 +16,10 @@ function complimentaryProduct(s, l, vs)
 end
 
 function each(t, func) for _, v in ipairs(t) do func(v) end end
+
+function reverseLookup(arr)
+  local map = {}
+   -- tautology, because we only care about ontology
+  for i = 1, #arr do map[arr[i]] = arr[i] end
+  return map
+end

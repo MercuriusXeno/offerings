@@ -17,8 +17,6 @@ local originalStats = "original_stats_"
 local function unprefix(s, n) return s:sub(n + 1) end
 
 local function prefOg(s) return originalStats .. s end
-local OG = #prefOg("")
-local function unprefOg(s) return unprefix(s, OG) end
 
 local function prefMat(s) return prefOg("material_" .. s) end
 local MAT = #prefMat("")

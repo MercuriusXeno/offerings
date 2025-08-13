@@ -26,13 +26,39 @@ function itemNamed(eid, name) return hasCompMatch(eid, "ItemComponent", nil, "it
 
 function disableSimplePhysics(eid) disableAllComps(eid, "SimplePhysicsComponent") end
 
-function linkedItems(altar) return storedIntsArray(altar, itemLink) end
+function linkedItems(altar)
+    local map = {}
+    local holderChildren = EntityGetAllChildren(altar) or {}
+    for i = 1, #holderChildren do
+        local hid = #holderChildren[i]
+        local eid = storedInt(hid, "eid", true)
+        map[eid] = eid
+    end
+    return map
+end
 
-function linkedAltar(eid) return storedInt(eid, altarLink, true) end
+function target(altar)
+    if #linkedItems(altar) > 0 then return linkedItems(altar)[1] end
+    return nil
+end
+
+function isLinked(altar, item)
+    return linkedItems(altar)[item] == item
+end
+
+function link(altar, item)
+    -- create a holder for the item and add it to the altar
+    local e = EntityLoad("mods/offerings/entity/holder.xml", EntityGetTransform(altar))
+    storeInt(e, "eid", item)
+    EntityAddChild(altar, e)
+end
 
 function linkedItemsWhere(altar, pred)
     local arr = {}
-    for _, c in ipairs(linkedItems(altar)) do if pred(altar, c) then arr[#arr + 1] = c end end
+    local links = linkedItems(altar)
+    for i = 1, #links do
+        if pred(altar, links[i]) then arr[links[i]] = links[i] end
+    end
     return arr
 end
 
@@ -62,29 +88,8 @@ function flasks(altar) return linkedItemsWhere(altar, isFlask) end
 
 function flaskEnhancers(altar) return linkedItemsWhere(altar, isFlaskEnhancer) end
 
-function target(altar) return #linkedItems(altar) > 0 and linkedItems(altar)[1] or nil end
-
-function isLinked(altar, item)
-    local isAltarItem = false
-    for _, i in ipairs(linkedItems(altar)) do
-        isAltarItem = isAltarItem or i == item
-        if isAltarItem then break end
-    end
-    -- if link is broken sever and return false
-    local isItemAltar = storedInt(item, altarLink, true) == altar
-    if (isItemAltar ~= isAltarItem) then
-        sever(altar, item)
-        return false
-    end
-    return isItemAltar and isAltarItem
-end
-
-function link(altar, item)
-    storeInt(altar, itemLink, item)
-    storeInt(item, altarLink, altar)
-end
-
 function sever(altar, item)
+    debugOut("severing connection between altar " .. altar .. " and item " .. item)
     local function hasItemLink(comp)
         return cGet(comp, "name") == itemLink
             and cGet(comp, "value_int") == item
@@ -163,6 +168,7 @@ function handleAltarLink(altar, isUpper, eid, isLinked, x, y, ex, ey)
         end
     end
 
+    debugOut("linking altar " .. altar .. " to item " .. eid .. " islinked ? " .. tostring(isLinked))
     -- handle adding or removing item from the altar children
     linkOrSever(altar, eid, isLinked)
 
