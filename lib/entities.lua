@@ -12,10 +12,6 @@ local SPC = "SimplePhysicsComponent"
 local SPEC = "SpriteParticleEmitterComponent"
 local PEC = "ParticleEmitterComponent"
 
-function isFlask(eid) return EntityHasTag(eid, "potion") or itemNamed(eid, "$item_cocktail") end
-
-function isFlaskEnhancer(eid) return isFlask(eid) or hasAnyEnchantValue(eid) end
-
 function isWand(eid) return EntityHasTag(eid, "wand") end
 
 function isWandEnhancer(eid) return isWand(eid) end
@@ -27,14 +23,14 @@ function itemNamed(eid, name) return hasCompMatch(eid, "ItemComponent", nil, "it
 function disableSimplePhysics(eid) disableAllComps(eid, "SimplePhysicsComponent") end
 
 function linkedItems(altar)
-    local map = {}
+    local result = {}
     local holderChildren = EntityGetAllChildren(altar) or {}
     for i = 1, #holderChildren do
         local hid = #holderChildren[i]
         local eid = storedInt(hid, "eid", true)
-        map[eid] = eid
+        result[eid] = eid
     end
-    return map
+    return result
 end
 
 function target(altar)
@@ -46,11 +42,17 @@ function isLinked(altar, item)
     return linkedItems(altar)[item] == item
 end
 
+---Create a holder entity sired by the altar, attached to the item
+---it represents. This is used to attach components holding its stats.
+---@param altar number
+---@param item number
+---@return number
 function link(altar, item)
     -- create a holder for the item and add it to the altar
     local e = EntityLoad("mods/offerings/entity/holder.xml", EntityGetTransform(altar))
     storeInt(e, "eid", item)
     EntityAddChild(altar, e)
+    return e
 end
 
 function linkedItemsWhere(altar, pred)
@@ -78,28 +80,17 @@ function isLowerAltar(eid) return EntityHasTag(eid, lowerAltarTag) end
 
 function isAltar(eid) return isUpperAltar(eid) or isLowerAltar(eid) end
 
-function getUpperAltar(eid) return closestToEntity(eid, upperAltarTag) end
+function upperAltarNear(eid) return closestToEntity(eid, upperAltarTag) end
 
-function getLowerAltar(eid) return closestToEntity(eid, lowerAltarTag) end
+function lowerAltarNear(eid) return closestToEntity(eid, lowerAltarTag) end
 
 function wands(altar) return linkedItemsWhere(altar, isWand) end
 
-function flasks(altar) return linkedItemsWhere(altar, isFlask) end
-
-function flaskEnhancers(altar) return linkedItemsWhere(altar, isFlaskEnhancer) end
-
 function sever(altar, item)
-    debugOut("severing connection between altar " .. altar .. " and item " .. item)
-    local function hasItemLink(comp)
-        return cGet(comp, "name") == itemLink
-            and cGet(comp, "value_int") == item
+    local holders = EntityGetAllChildren(altar) or {}
+    for i = 1, #holders do
+        EntityKill(holders[i])
     end
-    removeEntityComponentWhere(altar, VSC, nil, hasItemLink)
-    local function hasAltarLink(comp)
-        return cGet(comp, "name") == altarLink
-            and cGet(comp, "value_int") == altar
-    end
-    removeEntityComponentWhere(item, VSC, nil, hasAltarLink)
 end
 
 function linkOrSever(altar, item, isLinking)
@@ -138,7 +129,9 @@ local pickupWand = {
 }
 
 ---Handle linking and unlinking items from an altar, setting and reversing various things.
-function handleAltarLink(altar, isUpper, eid, isLinked, x, y, ex, ey)
+function handleAltarLink(altar, isUpper, eid, isLinked)
+    local x, y = EntityGetTransform(altar)
+    local ex, ey = eid ~= 0 and EntityGetTransform(eid) or 0, 0
     -- aesthetic stuff when linking the item to the altar, rotation mainly.
     if isLinked then
         local dx = isUpper and x or ex
@@ -176,5 +169,8 @@ function handleAltarLink(altar, isUpper, eid, isLinked, x, y, ex, ey)
     eachComponentSet(eid, SPEC, nil, "velocity_always_away_from_center", isLinked)
 
     -- enable the altar rune particle emitter if it has any children
-    toggleComps(altar, PEC, nil, #linkedItems(altar) > 0)
+    local function itemsLinkedAndParticleGravityZero(comp)
+        return cObjGet(comp, "gravity", "y") == 0.0 and #linkedItems(altar) > 0
+    end
+    toggleCompsWhere(altar, PEC, nil, itemsLinkedAndParticleGravityZero)
 end

@@ -26,6 +26,10 @@ local function prefEnch(s) return prefOg("enchant_" .. s) end
 local ENCH = #prefEnch("")
 local function unprefEnch(s) return unprefix(s, ENCH) end
 
+function isFlask(eid) return EntityHasTag(eid, "potion") or itemNamed(eid, "$item_cocktail") end
+
+function isFlaskEnhancer(eid) return isFlask(eid) or hasAnyEnchantValue(eid) end
+
 function flaskMaterials(eid)
     if isFlask(eid) then
         local comp = firstComponent(eid, MIC)
@@ -37,7 +41,7 @@ end
 -- list of enchantments of flasks and their detection item
 local enchants = {}
 
-local function sumEnchantPower(def, eid)
+function sumEnchantPower(def, eid)
     local r = 0
     for _, f in ipairs(def.evaluators) do r = r + f(eid) end
     return r
@@ -52,8 +56,6 @@ function registerFlaskEnchantment(key, evaluators, min, max, apply, describe)
         apply = apply,
         describe = describe
     }
-    local function defSum(eid) return sumEnchantPower(enchants[key], eid) end
-    def.value = defSum
     enchants[key] = def
 end
 
@@ -65,7 +67,7 @@ registerFlaskEnchantment("transmuting", { potionMimicValue }, 0, 1, makeTransmut
 
 function hasAnyEnchantValue(eid)
     for _, enchant in pairs(enchants) do
-        if enchant.value(eid) ~= 0 then return true end
+        if sumEnchantPower(enchant, eid) ~= 0 then return true end
     end
     return false
 end
@@ -230,9 +232,9 @@ function reactivity(c)
     }
 end
 
-function combineFlasks(upperAltar, lowerAltar, isRestore)
+function mergeFlaskStats(upperAltar, lowerAltar, isRestore)
     local t = originalFlask(upperAltar)
-    local offered = isRestore and {} or flaskEnhancers(lowerAltar)
+    local offered = isRestore and {} --or flaskEnhancers(lowerAltar)
     for _, offer in ipairs(offered) do
         if isFlask(offer) then
             local function pushMat(k, v) if v > 0 then increment(t.materials, prefMat(k), v) end end

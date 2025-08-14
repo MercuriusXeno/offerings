@@ -119,6 +119,13 @@ function toggleComps(eid, ctype, tag, isEnabled)
   eachEntityComponent(eid, ctype, tag, flip)
 end
 
+function toggleCompsWhere(eid, ctype, tag, func)
+  local function flip(e, comp)
+    toggleComp(e, comp, func(comp))
+  end
+  eachEntityComponent(eid, ctype, tag, flip)
+end
+
 function disableAllComps(eid, ctype, tag) toggleComps(eid, ctype, tag, false) end
 
 function enableAllComps(eid, ctype, tag) toggleComps(eid, ctype, tag, true) end
