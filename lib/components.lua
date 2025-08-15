@@ -1,8 +1,15 @@
 dofile_once("mods/offerings/lib/math.lua")
 dofile_once("mods/offerings/lib/logging.lua")
+
+local thonk = dofile("mods/offerings/lib/thonk.lua") ---@type Thonk
+
 local VSC = "VariableStorageComponent"
 local originalStats = "original_stats_"
 
+---For each entity component, execute a function
+---@param eid integer the entity we are looping components of
+---@param ctype string which components to find
+---@param tag string|nil the tag of the component to filter by or nil
 function componentsOfType(eid, ctype, tag)
   if tag ~= nil then
     return EntityGetComponentIncludingDisabled(eid, ctype, tag) or {}
@@ -11,6 +18,11 @@ function componentsOfType(eid, ctype, tag)
   end
 end
 
+---For each entity component, execute a function
+---@param eid integer the entity we are looping components of
+---@param ctype string which components to find
+---@param tag string|nil the tag of the component to filter by or nil
+---@param pred fun(comp: integer) the predicate against each component
 function componentsWhere(eid, ctype, tag, pred)
   local arr = {}
   local function push(comp) arr[#arr + 1] = comp end
@@ -20,16 +32,33 @@ function componentsWhere(eid, ctype, tag, pred)
   return arr
 end
 
+---Return a collection of components of a type whose field matches a value
+---@param eid integer the entity we are looping components of
+---@param ctype string which components to find
+---@param tag string|nil the tag of the component to filter by or nil
+---@param field string the field name to test a match for
+---@param val any the value to compare to the field value
 function componentsMatching(eid, ctype, tag, field, val)
   local function match(comp) return cMatch(comp, field, val) end
   return componentsWhere(eid, ctype, tag, match)
 end
 
+---Return a collection of components of a type whose field contains a value
+---@param eid integer the entity we are looping components of
+---@param ctype string which components to find
+---@param tag string|nil the tag of the component to filter by or nil
+---@param field string the field name to test a match for
+---@param val any the value to compare to the field value
 function componentsLike(eid, ctype, tag, field, val)
   local function like(comp) return cLike(comp, field, val) end
   return componentsWhere(eid, ctype, tag, like)
 end
 
+---For each entity component, execute a function
+---@param eid integer the entity we are looping components of
+---@param ctype string which components to find
+---@param tag string|nil the tag of the component to filter by or nil
+---@param func fun(eid: integer, comp: integer) the function to execute on each component
 function eachEntityComponent(eid, ctype, tag, func)
   for _, comp in ipairs(componentsOfType(eid, ctype, tag)) do func(eid, comp) end
 end
@@ -119,6 +148,11 @@ function toggleComps(eid, ctype, tag, isEnabled)
   eachEntityComponent(eid, ctype, tag, flip)
 end
 
+---Return a collection of components of a type whose field matches a value
+---@param eid integer the entity we are looping components of
+---@param ctype string which components to find
+---@param tag string|nil the tag of the component to filter by or nil
+---@param func fun(comp: integer): boolean the function to determine each component is enabled
 function toggleCompsWhere(eid, ctype, tag, func)
   local function flip(e, comp)
     toggleComp(e, comp, func(comp))
@@ -137,7 +171,11 @@ function cMerge(t, comp, field, l, s)
 end
 
 function cGet(comp, field)
-  return comp and ComponentGetValue2(comp, field)
+  if not comp then return nil end
+  -- pack multi-returns into an array for easier closures
+  local n, vals = capture(ComponentGetValue2, comp, field)
+  if n == 1 then return vals[1] end
+  return vals
 end
 
 function cSet(comp, field, ...)
@@ -152,8 +190,10 @@ function cObjSet(comp, obj, field, ...)
   ComponentObjectSetValue2(comp, obj, field, ...)
 end
 
-function cMatch(comp, field, value)
-  return cGet(comp, field) == value
+function cMatch(comp, field, val)
+  local compVal = cGet(comp, field)
+  if type(val) == "table" and type(compVal) == "table" then return arrayEquals(val, compVal) end
+  return val == compVal
 end
 
 function cLike(comp, field, value)

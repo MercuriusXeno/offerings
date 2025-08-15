@@ -17,9 +17,18 @@ end
 
 function each(t, func) for _, v in ipairs(t) do func(v) end end
 
-function reverseLookup(arr)
-  local map = {}
-   -- tautology, because we only care about ontology
-  for i = 1, #arr do map[arr[i]] = arr[i] end
-  return map
+function pack(...) return { n = select('#', ...), ... } end
+
+function capture(f, ...)
+  local t = pack(f(...))       -- t[1], t[2], ..., t.n is the count
+  return t.n, t
+end
+
+function arrayEquals(a, b)
+  if a == b then return true end
+  if type(a) ~= "table" or type(b) ~= "table" then return false end
+  local na, nb = #a, #b
+  if na ~= nb then return false end
+  for i = 1, na do if a[i] ~= b[i] then return false end end
+  return true
 end

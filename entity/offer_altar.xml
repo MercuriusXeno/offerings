@@ -30,15 +30,15 @@
   <ParticleEmitterComponent
     emitted_material_name="spark"
     _enabled="0"
-    gravity.y="-40.0"
-    y_pos_offset_min="0"
-    y_pos_offset_max="0"
-    x_pos_offset_min="-37"
-    x_pos_offset_max="37"
-    lifetime_min="4"
-    lifetime_max="8"
-    count_min="3"
-    count_max="5"
+    gravity.y="-10.0"
+    y_pos_offset_min="6"
+    y_pos_offset_max="6"
+    x_pos_offset_min="-29"
+    x_pos_offset_max="29"
+    lifetime_min="2"
+    lifetime_max="4"
+    count_min="1"
+    count_max="3"
     render_on_grid="1"
     fade_based_on_lifetime="1"
     area_circle_radius.min="0"
@@ -52,6 +52,7 @@
     is_emitting="1"
   >
   </ParticleEmitterComponent>
+  <LightComponent _enabled="0" update_properties="1" r="255" g="178" b="118" radius="29" />
   <LuaComponent
     execute_every_n_frame="1"
     script_source_file="mods/offerings/entity/offer_scan.lua">

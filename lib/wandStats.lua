@@ -1,3 +1,5 @@
+local thonk = dofile("mods/offerings/lib/thonk.lua") ---@type Thonk
+
 ---@class WandStats
 ---@field fire_rate_wait integer[] -- gunaction_config
 ---@field reload_time integer[] -- gun_config
@@ -21,10 +23,13 @@ local wandStatDefs = {
     { prop = "mana_charge_speed", obj = nil,                formula = "loop" }
 }
 
+function isWand(eid) return EntityHasTag(eid, "wand") end
+
+function isWandEnhancer(eid) return isWand(eid) end
+
 function setWandResult(wand, wandStats)
     local ability = firstComponent(wand, "AbilityComponent", nil)
-    for i = 1, #wandStatDefs do
-        local def = wandStatDefs[i]
+    for _, def in ipairs(wandStatDefs) do
         local pool = wandStats[def.prop]
         local value = pool[1]
         if def.obj then
@@ -77,9 +82,13 @@ end
 ---@param injectedStats WandStats Any wand or holder with ability component(s)
 ---@return WandStats
 function injectWandStatsIntoWandStats(wandStats, injectedStats)
-    for key, _ in pairs(wandStatDefs) do
-        for i = 1, #injectedStats[key] do
-            table.insert(wandStats[key], injectedStats[key][i])
+    thonk.about("left wand", wandStats, "right wand(s)", injectedStats)
+    for _, def in ipairs(wandStatDefs) do
+        local statPool = injectedStats[def.prop]
+        if statPool then
+            for _, stat in ipairs(statPool) do
+                table.insert(wandStats[def.prop], stat)
+            end
         end
     end
     return wandStats
@@ -94,11 +103,16 @@ end
 ---@return WandStats
 function mergeWandStats(upperAltar, lowerAltar)
     local result = holderWandStats(upperAltar)[1]
+    thonk.about("upper altar wand holder stats", result)
     if lowerAltar == 0 then return result end
 
     local offerings = holderWandStats(lowerAltar)
+    thonk.about("lower altar (offerings) wand holder stats", offerings)
     injectWandStatsIntoWandStats(result, offerings)
-    return blend(result)
+    local blended = blend(result)
+    
+    thonk.about("blended wand result", blended)
+    return blended
 end
 
 ---Take WandStats and blend each based on "formula"
@@ -106,24 +120,25 @@ end
 ---@return WandStats
 function blend(stats)
     local result = newWandStats()
-    for i = 1, #wandStatDefs do
-        local def = wandStatDefs[i]
+    for _, def in ipairs(wandStatDefs) do
         local values = stats[def.prop]
         local pool = { unpack(values) }
         -- really only necessary for asymmetric merging, but the impact is low
         -- as long as this isn't called excessively.
         table.sort(pool)
+        thonk.about("pool of stats", pool, "merge strategy", def.formula)
         while #pool > 1 do
             local worst = table.remove(pool, 1)
             local next_worst = table.remove(pool, 1)
-            if def == "loop" then
+            if def.formula == "loop" then
                 poolInject(pool, next_worst + ((worst / next_worst) ^ 0.5) * worst)
-            elseif def == "min" then
+            elseif def.formula == "min" then
                 poolInject(pool, math.min(worst, next_worst))
-            elseif def == "max" then
+            elseif def.formula == "max" then
                 poolInject(pool, math.max(worst, next_worst))
             end
         end
+        thonk.about("stat", def.prop, "final stat value", pool[1])
         -- at this point only one result should be in each pool
         table.insert(result[def.prop], pool[1])
     end
@@ -146,23 +161,22 @@ function poolInject(pool, merged)
 end
 
 ---Store a wand's stats in a holder linking to the item.
----@param altar number the altar holding the item
 ---@param eid number the wand being added to the altar
-function storeWandStats(altar, eid)
+---@param holder number the holder of the wand representative
+function storeWandStats(eid, holder)
     local stats = injectAbilityIntoWandStats(nil, eid)
-    local holder = link(altar, eid)
     EntityAddComponent2(holder, "AbilityComponent", {})
     setWandResult(holder, stats)
 end
 
 ---Gather all the wand stats belonging to holder children of the altar.
+---These are the holder stats, NOT the wands they represent.
 ---@param altar number the altar we want the stats of wands on
 ---@return number[] result an array of ability components
 function holderWandAbilities(altar)
     local holders = EntityGetAllChildren(altar) or {}
     local result = {}
-    for i = 1, #holders do
-        local child = holders[i]
+    for _, child in ipairs(holders) do
         local ability = firstComponent(child, "AbilityComponent", nil)
         result[#result + 1] = ability
     end
@@ -175,8 +189,7 @@ end
 function holderWandStats(altar)
     local abilities = holderWandAbilities(altar)
     local result = {}
-    for i = 1, #abilities do
-        local ability = abilities[i]
+    for _, ability in ipairs(abilities) do
         result[#result + 1] = scrapeAbility(nil, ability)
     end
     return result

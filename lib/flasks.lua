@@ -204,10 +204,13 @@ function originalFlask(altar)
     }
 end
 
-function storeFlaskStats(altar, eid)
+function storeFlaskStats(altar, eid, holder)
     clearOriginalStats(altar)
     local function pushMat(matId, amount) if amount > 0 then storeInt(altar, prefMat(matId), amount) end end
-    for matId, amount in pairs(flaskMaterials(eid)) do pushMat(matId, amount) end
+    local materials = flaskMaterials(eid)
+    if type(materials) == "table" then
+        for matId, amount in pairs(materials) do pushMat(matId, amount) end
+    end
     local function pushEnch(key, level)
         if level ~= 0 then
             debugOut(" enchant " .. key .. " is level " .. level .. " so we are storing the int!")
@@ -237,17 +240,20 @@ function mergeFlaskStats(upperAltar, lowerAltar, isRestore)
     local offered = isRestore and {} --or flaskEnhancers(lowerAltar)
     for _, offer in ipairs(offered) do
         if isFlask(offer) then
-            local function pushMat(k, v) if v > 0 then increment(t.materials, prefMat(k), v) end end
-            for matId, amount in pairs(flaskMaterials(offer)) do pushMat(matId, amount) end
-            local function pushEnch(k, v) if v ~= 0 then increment(t.enchantments, k, v) end end
-            for k, _ in pairs(enchants) do pushEnch(k, enchantLevel(offer, k)) end
-            local msc = firstComponent(offer, MSC)
-            cSum(t, msc, "barrel_size")
-            cSum(t, msc, "num_cells_sucked_per_frame")
-            local potion = firstComponent(offer, "PotionComponent")
-            cMerge(t, potion, "spray_velocity_coeff", 225, 0.5)
-            cMerge(t, potion, "spray_velocity_normalized_min", 1.5, 0.5)
-            cMerge(t, potion, "throw_how_many", t.barrel_size ^ 0.75, 1)
+            local materials = flaskMaterials(offer)
+            if type(materials) == "table" then
+                local function pushMat(k, v) if v > 0 then increment(t.materials, prefMat(k), v) end end
+                for matId, amount in pairs(materials) do pushMat(matId, amount) end
+                local function pushEnch(k, v) if v ~= 0 then increment(t.enchantments, k, v) end end
+                for k, _ in pairs(enchants) do pushEnch(k, enchantLevel(offer, k)) end
+                local msc = firstComponent(offer, MSC)
+                cSum(t, msc, "barrel_size")
+                cSum(t, msc, "num_cells_sucked_per_frame")
+                local potion = firstComponent(offer, "PotionComponent")
+                cMerge(t, potion, "spray_velocity_coeff", 225, 0.5)
+                cMerge(t, potion, "spray_velocity_normalized_min", 1.5, 0.5)
+                cMerge(t, potion, "throw_how_many", t.barrel_size ^ 0.75, 1)
+            end
         else
             local function pushEnch(k, v) increment(t.enchantments, k, v) end
             for k, def in pairs(enchants) do pushEnch(k, def.value(offer)) end
