@@ -31,17 +31,17 @@ function rOut(r, ...)
         local p = select(i, ...)
         local a = select(i + 1, ...)
         if type(a) == "table" then
-            r[#r+1] = p .. " {\n"
+            r[#r+1] = p .. " {"
             local varargs = {}
             for k, v in pairs(a) do
                 varargs[#varargs+1] = k
                 varargs[#varargs+1] = v
             end
             rOut(r, unpack(varargs))
-            r[#r+1] = "}\n"
+            r[#r+1] = "}"
         else
             local s = type(a) == "string" and a or tostring(a)
-            r[#r+1] = p .. " " .. s .. "\n"
+            r[#r+1] = p .. " " .. s .. ""
         end
         i = i + 2
     end

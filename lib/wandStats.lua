@@ -29,6 +29,7 @@ function isWandEnhancer(eid) return isWand(eid) end
 
 function setWandResult(wand, wandStats)
     local ability = firstComponent(wand, "AbilityComponent", nil)
+    if not ability then return end
     for _, def in ipairs(wandStatDefs) do
         local pool = wandStats[def.prop]
         local value = pool[1]
@@ -79,15 +80,17 @@ end
 
 ---Scrape the stats out of a wand or holder's ability component(s)
 ---@param wandStats WandStats an existing wandstats
----@param injectedStats WandStats Any wand or holder with ability component(s)
+---@param allOfferingsStats WandStats[] All wands stats as an array of stats holders.
 ---@return WandStats
-function injectWandStatsIntoWandStats(wandStats, injectedStats)
-    thonk.about("left wand", wandStats, "right wand(s)", injectedStats)
+function injectWandStatsIntoWandStats(wandStats, allOfferingsStats)
+    -- thonk.about("left wand", wandStats, "right wand(s)", allOfferingsStats)
     for _, def in ipairs(wandStatDefs) do
-        local statPool = injectedStats[def.prop]
-        if statPool then
-            for _, stat in ipairs(statPool) do
-                table.insert(wandStats[def.prop], stat)
+        for i, offeringStats in ipairs(allOfferingsStats) do
+            local statPool = offeringStats[def.prop]
+            if statPool then
+                for _, stat in ipairs(statPool) do
+                    table.insert(wandStats[def.prop], stat)
+                end
             end
         end
     end
@@ -109,9 +112,11 @@ function mergeWandStats(upperAltar, lowerAltar)
     local offerings = holderWandStats(lowerAltar)
     thonk.about("lower altar (offerings) wand holder stats", offerings)
     injectWandStatsIntoWandStats(result, offerings)
+    --thonk.about("results before blend", result, "offerings before blend", offerings)
+
     local blended = blend(result)
-    
-    thonk.about("blended wand result", blended)
+
+    --thonk.about("blended wand result", blended)
     return blended
 end
 
@@ -121,12 +126,11 @@ end
 function blend(stats)
     local result = newWandStats()
     for _, def in ipairs(wandStatDefs) do
-        local values = stats[def.prop]
-        local pool = { unpack(values) }
+        local pool = stats[def.prop]
         -- really only necessary for asymmetric merging, but the impact is low
         -- as long as this isn't called excessively.
         table.sort(pool)
-        thonk.about("pool of stats", pool, "merge strategy", def.formula)
+        -- thonk.about("pool of stats", pool, "merge strategy", def.formula)
         while #pool > 1 do
             local worst = table.remove(pool, 1)
             local next_worst = table.remove(pool, 1)
@@ -138,10 +142,11 @@ function blend(stats)
                 poolInject(pool, math.max(worst, next_worst))
             end
         end
-        thonk.about("stat", def.prop, "final stat value", pool[1])
+        -- thonk.about("stat", def.prop, "final stat value", pool[1])
         -- at this point only one result should be in each pool
         table.insert(result[def.prop], pool[1])
     end
+    --thonk.about("blended stats", result)
     return result
 end
 
@@ -152,7 +157,7 @@ end
 function poolInject(pool, merged)
     for i = 1, #pool do
         if merged < pool[i] then
-            table.insert(pool, i, merged)
+            table.insert(pool, i, math.floor(merged))
             return
         end
     end
@@ -164,6 +169,16 @@ end
 ---@param eid number the wand being added to the altar
 ---@param holder number the holder of the wand representative
 function storeWandStats(eid, holder)
+    --thonk.about("storing wand stats of", eid, "on holder", holder)
+    --thonk.about("holder stored eid", storedInt(holder, "eid", true))
+    -- if the holder doesn't align DO NOT overwrite its stats
+    if storedInt(holder, "eid", true) ~= eid then return end
+    local ability = firstComponent(holder, "AbilityComponent", nil)
+    --thonk.about("holder ability component exists?", ability ~= nil, "ability", ability)
+    -- if the holder already has a stat block ALSO don't overwrite it.
+    if firstComponent(holder, "AbilityComponent", nil) then return end
+
+    --thonk.about("storing wand stats from", eid, "on holder", holder)
     local stats = injectAbilityIntoWandStats(nil, eid)
     EntityAddComponent2(holder, "AbilityComponent", {})
     setWandResult(holder, stats)
@@ -178,7 +193,7 @@ function holderWandAbilities(altar)
     local result = {}
     for _, child in ipairs(holders) do
         local ability = firstComponent(child, "AbilityComponent", nil)
-        result[#result + 1] = ability
+        if ability then result[#result + 1] = ability end
     end
     return result
 end

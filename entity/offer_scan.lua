@@ -30,18 +30,16 @@ local function offerLinkFunc(lowerAltar, eid)
         if holder ~= 0 then storeWandStats(eid, holder) end
         combined = mergeWandStats(upperAltar, lowerAltar)
         setWandResult(targetOfAltar(upperAltar), combined)
-        return true
     end
     if isFlask(eid) then
         if holder ~= 0 then storeFlaskStats(lowerAltar, eid, holder) end
         combined = mergeWandStats(upperAltar, lowerAltar)
         setFlaskResult(targetOfAltar(upperAltar), combined)
-        return true
     end
-    return false
+    return true
 end
 
-local function offerSeverNoop(altar, eid)
+local function offerSeverNoop(lowerAltar, eid)
 end
 
 local altar = GetUpdatedEntityID()

@@ -20,28 +20,26 @@ function targetLinkFunc(upperAltar, eid)
     if target ~= nil then return false end
     if not isValidTarget(eid) then return false end
     local holder = handleAltarLink(upperAltar, true, eid, true)
+    thonk.about("holder", holder, "holder wand", eid)
     local combined = {}
     if isWand(eid) then
-        --thonk.about("holder", holder, "holder wand", eid)
         storeWandStats(eid, holder)
         combined = mergeWandStats(upperAltar, lowerAltarNear(upperAltar))
         setWandResult(eid, combined)
-        return true
     elseif isFlask(eid) then
         --thonk.about("holder", holder, "holder flask", eid)
         storeFlaskStats(upperAltar, eid, holder)
         combined = mergeFlaskStats(upperAltar, lowerAltarNear(upperAltar))
         setFlaskResult(eid, combined)
-        return true
     end
-    return false
+    return true
 end
 
 ---Before-sever-function for targets, restores them to their vanilla state.
 ---@param altar integer The target altar restoring the item
 ---@param eid integer The item id being restored
 function restoreTargetOriginalStats(altar, eid)
-    --thonk.about("restoring item ", eid)
+    thonk.about("restoring item ", eid)
     local combined = {}
     if isWand(eid) then
         combined = mergeWandStats(altar, 0)

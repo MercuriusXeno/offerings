@@ -94,15 +94,15 @@ function removeLike(eid, ctype, tag, field, val)
 end
 
 ---Returns the first component matching ctype with tag, optional
----@param eid number
+---@param eid integer
 ---@param ctype string
 ---@param tag? string|nil
----@return number
+---@return number|nil componentId or nil if no component found
 function firstComponent(eid, ctype, tag)
   if tag == nil then
-    return EntityGetFirstComponentIncludingDisabled(eid, ctype) or 0
+    return EntityGetFirstComponentIncludingDisabled(eid, ctype) or nil
   else
-    return EntityGetFirstComponentIncludingDisabled(eid, ctype, tag) or 0
+    return EntityGetFirstComponentIncludingDisabled(eid, ctype, tag) or nil
   end
 end
 
@@ -170,6 +170,11 @@ function cMerge(t, comp, field, l, s)
   increment(t, field, asymmetricMerge(s, l, t[field], cGet(comp, field)))
 end
 
+---Return the results of a component get which can be multipart (varargs)
+---or a table or a single value. We render varargs into a table.+
+---@param comp nil|integer the component we're scraping
+---@param field string what field we're scraping, by name
+---@return nil|table|any result the field result, can be a variety of things
 function cGet(comp, field)
   if not comp then return nil end
   -- pack multi-returns into an array for easier closures
@@ -230,8 +235,9 @@ local vscFields = { "value_int", "value_string", "value_bool", "value_float" }
 ---@param comp number|nil
 ---@param isValueOnly boolean
 ---@param specificField string
----@return any|table
+---@return nil|any|table
 function unboxVsc(comp, isValueOnly, specificField)
+  if not comp then return nil end
   if isValueOnly then return cGet(comp, specificField) end
   local t = {}
   local function push(field) t[field] = cGet(comp, field) end
@@ -271,6 +277,12 @@ function storeInt(eid, name, val) store(eid, name, "value_int", val) end
 
 function storeFloat(eid, name, val) store(eid, name, "value_float", val) end
 
+---Returns the stored integer of a component (VSC) with an option to only have the value
+---in case you're storing other stuff on the VSC you want alongside it.
+---@param eid integer the entity we want the int from
+---@param name string the name of the vsc we're after
+---@param isValueOnly boolean whether to return only the value or an unboxed vsc table
+---@return nil|table|integer tableOrInt if we are returning value only we return an int, otherwise vsc table
 function storedInt(eid, name, isValueOnly) return firstStored(eid, name, isValueOnly, "value_int") end
 
 function storedFloat(eid, name, isValueOnly) return firstStored(eid, name, isValueOnly, "value_float") end
