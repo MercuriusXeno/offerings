@@ -2,10 +2,16 @@ dofile_once("data/scripts/lib/utilities.lua")
 dofile_once("mods/offerings/lib/components.lua")
 dofile_once("mods/offerings/lib/entities.lua")
 dofile_once("mods/offerings/lib/logging.lua")
-dofile_once("mods/offerings/lib/flasks.lua")
+dofile_once("mods/offerings/lib/flaskStats.lua")
 dofile_once("mods/offerings/lib/wandStats.lua")
 
 local thonk = dofile("mods/offerings/lib/thonk.lua") ---@type Thonk
+
+
+---@class SeenItem
+---@field item integer
+---@field x number
+---@field y number
 
 local targetAltarWidth = 25
 local offerAltarWidth = 58
@@ -46,7 +52,7 @@ local pickupWand = {
 ---requirements for either is met, which depends on the altar calling it.
 ---@param altar integer the altar id running the scan
 ---@param isUpper boolean whether the altar is the target altar
----@param linkFunc fun(altar: integer, eid: integer): boolean the link function to use
+---@param linkFunc fun(altar: integer, eid: SeenItem): boolean the link function to use
 ---@param beforeSeverFunc fun(altar: integer, linkables: integer[],
 ---    beforeSeverFunc:fun(altar: integer, eid: integer))
 function scanForLinkableItems(altar, isUpper, linkFunc, beforeSeverFunc)
@@ -62,12 +68,13 @@ function scanForLinkableItems(altar, isUpper, linkFunc, beforeSeverFunc)
         -- search for linkables, including already linked items
         -- we need all items because we are culling any items that aren't in range
         -- and already linked items don't want to be *culled*, just avoid linking >1 time.
-        local linkables = linkableItemsNear(altar, isUpper, true)
-        local alreadyLinked = linkedItems(altar, false)
-        cullSeveredLinks(altar, linkables, alreadyLinked, beforeSeverFunc)
-        for _, eid in ipairs(linkables) do
-            if alreadyLinked[eid] == nil then
-                hasAnyLink = hasAnyLink or linkFunc(altar, eid)
+        local linkables = linkableItemsNear(altar, isUpper)
+        local alreadyLinked = linkedItemsMap(altar)
+        local missingLinks = detectSeveredLinks(linkables, alreadyLinked)
+        cullSeveredLinks(altar, missingLinks, linkables, beforeSeverFunc)
+        for _, seen in ipairs(linkables) do
+            if alreadyLinked[seen.item] == nil then
+                hasAnyLink = linkFunc(altar, seen) or hasAnyLink
             else
                 hasAnyLink = true
             end
@@ -77,42 +84,115 @@ function scanForLinkableItems(altar, isUpper, linkFunc, beforeSeverFunc)
     toggleFirstCompMatching(altar, PEC, nil, "gravity", { 0, 0 }, hasAnyLink)
 end
 
+---Find the missing links in our already linked items, returning those unseen by the loop
+---@param seenItems SeenItem[] the linkable indices being checked for severance, as an array
+---@param alreadyLinked table<integer,LinkMap> the existing links being checked, as a kvp map of item id to LinkMap
+---@return SeenItem[] array of seen items (in this case unseen items) ids and x/y coordinates
+function detectSeveredLinks(seenItems, alreadyLinked)
+    local unseen = {} ---@type SeenItem[]
+    for linkedItem, linkMap in pairs(alreadyLinked) do
+        local found = 0
+        for _, s in ipairs(seenItems) do
+            if s.item == linkedItem then found = s.item end
+        end
+        if found == 0 then
+            local x, y = EntityGetTransform(linkedItem)
+            unseen[#unseen + 1] = { item = linkedItem, x = linkMap.x, y = linkMap.y }
+        end
+    end
+    return unseen
+end
+
+---Removes any existing links that have been severed by non-existence or removal.
+---@param altar integer the altar doing the unlinking/severing
+---@param missingLinks SeenItem[] the existing links being checked, as a kvp map of item id to LinkMap
+---@param linkables SeenItem[] the linkable indices being checked for severance, as an array
+---@param beforeSeverFunc fun(altar: integer, eid: integer) the function to perform before severing each item
+function cullSeveredLinks(altar, missingLinks, linkables, beforeSeverFunc)
+    local relinks = {} ---@type table<SeenItem, SeenItem>
+    local culls = {} ---@type SeenItem[]
+    for i, missingLink in ipairs(missingLinks) do
+        -- figure out if the link can be restored from an item
+        -- at the exact same x and y coordinates as the missing link
+        for _, linkable in ipairs(linkables) do
+            thonk.about("missing link", missingLink, "possible replacement", linkable)
+            if missingLink.x == linkable.x and missingLink.y == linkable.y then
+                relinks[missingLink] = linkable
+            end
+        end
+        if relinks[missingLink] == nil then culls[#culls + 1] = missingLink end
+    end
+    for missing, replacement in pairs(relinks) do
+        thonk.about("relinking item", missing.item, "to item", replacement.item)
+        relink(altar, missing.item, replacement.item)
+    end
+    for _, cull in ipairs(culls) do
+        thonk.about("severing missing item", cull.item)
+        if isUpperAltar(altar) and isMissingItemPickedUp(cull) then
+            destroyAltarItemsUsedInTarget(cull.item)
+            sever(altar, cull.item, true)
+        else
+            beforeSeverFunc(altar, cull.item)
+            sever(altar, cull.item, false)
+        end
+    end
+end
+
+---Whether the item was picked up by the player nearby, in which case
+---we avoid doing certain recalculations and destroy the offerings if needed.
+---@param seen SeenItem
+function isMissingItemPickedUp(seen)    
+    local parent = EntityGetParent(seen.item)
+    thonk.about("entity picked up item", isInventory(parent))
+    if isInventory(parent) then return true end
+    return false
+end
+
+---If the x, y of a missing entity id matches a found one
+---we naively assume that is the entity "from before".
+---@param altar integer The altar of the item that was severed.
+---@param missing integer The item that was severed
+---@param relink integer The item that is in the same x/y
+function relink(altar, missing, relink)
+    -- if this is the upper altar
+    local holders = EntityGetAllChildren(altar) or {}
+    for _, hid in ipairs(holders) do
+        if storedInt(hid, "eid") == missing then
+            removeAll(hid, VSC, nil)
+            storeInt(hid, "eid", relink)
+            break
+        end
+    end
+    local upperAltar = upperAltarNear(altar)
+    -- if the item being relinked is the upper altar
+    -- our objective is to *reset* the upper altar, not
+    -- to regenerate the stats. It will have lost its originals.
+    if upperAltar == altar then
+        forceUpdates(altar, missing)
+    end
+end
+
 ---Returns linkables in range in one of two flavors: sequence or map
 ---@param altar integer the altar we're scanning with
 ---@param isUpper boolean whether the altar is the upper "target" altar
----@param isSequence boolean Whether to return the results as an array or a kvp map
----@return integer[]|table array containing the linkables in range as an array or key map.
-function linkableItemsNear(altar, isUpper, isSequence)
+---@return SeenItem[] table containing the linkables in range as an array or key map.
+function linkableItemsNear(altar, isUpper)
     -- different radius b/c wider lower altar
     local radius = isUpper and targetAltarRadius or offerAltarRadius
     local x, y = EntityGetTransform(altar)
     -- get linkables based on which altar we are
-    return linkablesInRange(x, y, radius, isSequence)
-end
-
----Returns linkables in range in one of two flavors: sequence or map
----@param x number The x coordinate of the altar
----@param y number The y coordinate of the altar
----@param radius number The radial reach of the altar's scanning
----@param isSequence boolean Whether to return the results as an array or a kvp map
----@return integer[]|table array containing the linkables in range as an array or key map.
-function linkablesInRange(x, y, radius, isSequence)
-    local map = {}
+    local result = {} ---@type SeenItem[]
     local entities = EntityGetInRadius(x, y, radius)
     for _, eid in ipairs(entities) do
-        if isLinkableInRange(eid, x, y, radius) then
-            local index = isSequence and #map + 1 or eid
-            map[index] = eid
+        if isLinkableItem(eid) then
+            local ex, ey = EntityGetTransform(eid)
+            local h = ((ex - x) ^ 2 + (ey - y) ^ 2) ^ 0.5
+            if h <= radius then
+                result[#result + 1] = { item = eid, x = ex, y = ey }
+            end
         end
     end
-    return map
-end
-
-function isLinkableInRange(eid, x, y, radius)
-    if not isLinkableItem(eid) then return false end
-    local ex, ey = EntityGetTransform(eid)
-    local h = ((ex - x) ^ 2 + (ey - y) ^ 2) ^ 0.5
-    return h <= radius
+    return result
 end
 
 function isLinkableItem(eid)
@@ -125,79 +205,60 @@ function entityIn(ex, ey, x, y, r, v) return ex >= x - r and ex <= x + r and ey 
 ---@class LinkMap
 ---@field item integer
 ---@field holder integer
+---@field x number
+---@field y number
 
 ---Returns already linked items belonging to the altar
 ---This returns the items, not the holders.
 ---@param altar integer The altar we're checking the links of
----@param isSequence boolean Whether to return the results as an array or a kvp map
----@return integer[]|table array containing the linkables in range as an array or key map.
-function linkedItems(altar, isSequence)
+---@return LinkMap[] array containing the linkables in range as an array
+function linkedItemsArray(altar)
     local result = {}
     local children = EntityGetAllChildren(altar) or {}
     for i, child in ipairs(children) do
-        local linkMap = {item = storedInt(child, "eid") or 0, holder = child} ---@type LinkMap        
-        local index = isSequence and i or linkMap.item
-        if index ~= 0 then result[index] = linkMap end
+        result[i] = { item = storedInt(child, "eid") or 0, holder = child }
     end
     return result
 end
 
----Removes any existing links that have been severed by non-existence or removal.
----@param altar integer the altar doing the unlinking/severing
----@param linkables integer[] the linkable indices being checked for severance, as an array
----@param alreadyLinked table the existing links being checked, as a kvp map
----@param beforeSeverFunc fun(altar: integer, eid: integer) the function to perform before severing each item
-function cullSeveredLinks(altar, linkables, alreadyLinked, beforeSeverFunc)
-    local seen = {}
-    for i, linkable in ipairs(linkables) do
-        local x, y = EntityGetTransform(linkable)
-        seen[i] = { k = linkable, x = x, y = y } -- store the location
+---Returns already linked items belonging to the altar
+---This returns the items, not the holders.
+---@param altar integer The altar we're checking the links of
+---@return table<integer,LinkMap> map containing the linkables in range as a key map.
+function linkedItemsMap(altar)
+    local result = {}
+    local children = EntityGetAllChildren(altar) or {}
+    for _, child in ipairs(children) do
+        local x, y = EntityGetTransform(child)
+        local linkMap = { item = storedInt(child, "eid") or 0, holder = child, x = x, y = y } ---@type LinkMap
+        if linkMap.item ~= 0 then result[linkMap.item] = linkMap end
     end
-    for k, _ in pairs(alreadyLinked) do
-        local x, y = EntityGetTransform(k)
-        local found = 0
-        for i, s in ipairs(seen) do
-            if s.k == k then found = s.k end        
-        end
-        if found == 0 then
-            for i, s in ipairs(seen) do
-                if s.x == x and s.y == y then found = s.k end
-            end
-        end
-        if found == 0 then
-            -- if we can't find an item at the x/y we sever the link
-            thonk.about("missing item", k)
-            beforeSeverFunc(altar, k)
-            sever(altar, k)
-        elseif found ~= k then
-            -- otherwise update the eid of the holder to that item's
-            thonk.about("relinking item", k)
-            relink(altar, k, found)
-        end
-    end
+    return result
 end
 
 ---EntityKill DOES NOT kill the entity right away, so there's some cleanup
 ---of comps needed before an update is coerced.
 ---@param altar integer The altar of the item that was severed.
 ---@param eid integer The item that was severed
-function sever(altar, eid)    
+---@param isPickup boolean Whether the item was flagged as picked up
+function sever(altar, eid, isPickup)
     -- if this is the upper altar
     local holders = EntityGetAllChildren(altar) or {}
-    local killId = 0
+    local hidToRemove = 0
     for _, hid in ipairs(holders) do
         if storedInt(hid, "eid") == eid then
-            killId = hid
+            hidToRemove = hid
             --thonk.about("killing holder", hid)
         end
     end
-    if killId ~= 0 then
-        removeAll(killId, VSC, nil)
-        removeAll(killId, "AbilityComponent", nil)
-        EntityKill(killId)
+    if hidToRemove ~= 0 then
+        removeAll(hidToRemove, VSC, nil)
+        removeAll(hidToRemove, "AbilityComponent", nil)
+        EntityKill(hidToRemove)
     end
+    if isPickup then return end
     local upperAltar = upperAltarNear(altar)
-    local upperItems = #linkedItems(upperAltar, true)
+    local upperItems = #linkedItemsArray(upperAltar)
     if upperItems > 0 then
         forceUpdates(altar, eid)
     end
@@ -208,48 +269,22 @@ function forceUpdates(altar, eid, isResetting)
     -- ALWAYS recalc after a severance.
     local upperAltar = upperAltarNear(altar)
     local lowerAltar = lowerAltarNear(altar)
-    local combined = {}
+    local target = targetOfAltar(upperAltar)
+    if target == nil then return false end
     if isWand(eid) then
+        local combinedWands = nil
         if not isResetting then
-            combined = mergeWandStats(upperAltar, lowerAltar)
+            combinedWands = mergeWandStats(upperAltar, lowerAltar)
         end
         --thonk.about("combined stats after severance recalc", combined)
-        setWandResult(targetOfAltar(upperAltar), combined)
+        setWandResult(target.item, combinedWands)
     end
     if isFlask(eid) then
+        local combinedFlasks = nil
         if not isResetting then
-            combined = mergeWandStats(upperAltar, lowerAltar)
+            combinedFlasks = mergeFlaskStats(upperAltar, lowerAltar)
         end
-        setFlaskResult(targetOfAltar(upperAltar), combined)
-    end
-end
-
----If the x, y of a missing entity id matches a found one
----we naively assume that is the entity "from before".
----@param altar integer The altar of the item that was severed.
----@param eid integer The item that was severed
----@param found integer The item that is in the same x/y
-function relink(altar, eid, found)
-    
-    -- if this is the upper altar
-    local holders = EntityGetAllChildren(altar) or {}
-    local relinkId = 0
-    for _, hid in ipairs(holders) do
-        if storedInt(hid, "eid") == eid then
-            relinkId = hid
-            --thonk.about("killing holder", hid)
-        end
-    end
-    if relinkId ~= 0 then
-        removeAll(relinkId, VSC, nil)
-        storeInt(relinkId, "eid", found)
-    end
-    local upperAltar = upperAltarNear(altar)
-    -- if the item being relinked is the upper altar
-    -- our objective is to *reset* the upper altar, not
-    -- to regenerate the stats. It will have lost its originals.
-    if upperAltar == altar then
-        forceUpdates(altar, eid)
+        setFlaskResult(target.item, combinedFlasks)
     end
 end
 
@@ -266,7 +301,7 @@ function destroyAltarItemsUsedInTarget(target, altar)
         GamePlaySound("data/audio/Desktop/projectiles.bank", "magic/common_destroy", x, y)
         EntityKill(offer)
     end
-    eachEntityWhere(linkedItems(altar, true), destroyPredicate, destroyFunction)
+    eachEntityWhere(linkedItemsArray(altar), destroyPredicate, destroyFunction)
 end
 
 function appendDescription(result, description_line)
@@ -285,24 +320,24 @@ function setDescription(eid, description)
 end
 
 function targetOfAltar(altar)
-    local links = linkedItems(altar, true)
+    local links = linkedItemsArray(altar)
     if #links > 0 then return links[1] end
     return nil
 end
 
 function isLinked(altar, item)
-    return linkedItems(altar, false)[item] ~= nil
+    return linkedItemsMap(altar)[item] ~= nil
 end
 
 ---Create a holder entity sired by the altar, attached to the item
 ---it represents. This is used to attach components holding its stats.
----@param altar number
----@param item number
----@return number
-function linkItemToAltar(altar, item)
+---@param altar integer
+---@param seen SeenItem
+---@return integer
+function makeHolderLink(altar, seen)
     -- create a holder for the item and add it to the altar
-    local e = EntityLoad("mods/offerings/entity/holder.xml", EntityGetTransform(altar))
-    storeInt(e, "eid", item)
+    local e = EntityLoad("mods/offerings/entity/holder.xml", seen.x, seen.y)
+    storeInt(e, "eid", seen.item)
     EntityAddChild(altar, e)
     return e
 end
@@ -310,61 +345,51 @@ end
 ---Handle linking and unlinking items from an altar, setting and reversing various things.
 ---@param altar integer the altar linking or severing
 ---@param isUpper boolean whether this is the upper (target) altar
----@param eid integer the item being linked or severed
----@param isLinked boolean whether the item is being linked or not
+---@param seen SeenItem the item being linked or severed
 ---@return integer eid the holder being linked in the process, or 0 for severance
-function handleAltarLink(altar, isUpper, eid, isLinked)
+function altarLinkToSeenItem(altar, isUpper, seen)
     toggleAltarRunes(altar, isLinked)
 
     -- aesthetic stuff when linking the item to the altar, rotation mainly.
     if isLinked then
-        local x, y = EntityGetTransform(altar)
-        local ex, ey = EntityGetTransform(eid)
-        local dx = isUpper and x or ex
+        local x, y = EntityGetTransform(altar)     
+        local dx = isUpper and x or seen.x
         local dy = y - 5 -- floaty
-        local uprightRot = isWand(eid) and -math.pi * 0.5 or 0.0
-        EntitySetTransform(eid, dx, dy, uprightRot)
-        eachComponentSet(eid, IC, nil, "spawn_pos", dx, dy)
+        local uprightRot = isWand(seen.item) and -math.pi * 0.5 or 0.0
+        EntitySetTransform(seen.item, dx, dy, uprightRot)
+        -- ensure the item holder matches the item's new location
+        seen.x = dx
+        seen.y = dy
+        eachComponentSet(seen.item, IC, nil, "spawn_pos", dx, dy)
     end
 
     -- make "first time pickup" fanfare when picking the item up
-    eachComponentSet(eid, IC, nil, "has_been_picked_by_player", not isLinked)
+    eachComponentSet(seen.item, IC, nil, "has_been_picked_by_player", not isLinked)
 
-    if isWand(eid) then
+    if isWand(seen.item) then
         -- immobilize wands
-        eachComponentSet(eid, IC, nil, "play_hover_animation", not isLinked)
-        eachComponentSet(eid, IC, nil, "play_spinning_animation", not isLinked)
-        toggleComps(eid, SPC, nil, not isLinked)
+        eachComponentSet(seen.item, IC, nil, "play_hover_animation", not isLinked)
+        eachComponentSet(seen.item, IC, nil, "play_spinning_animation", not isLinked)
+        toggleComps(seen.item, SPC, nil, not isLinked)
     end
 
     -- re-enables the first time pickup particles, which are fancy
     if isUpper then
-        local pickup = isWand(eid) and pickupWand or pickupFlask
-        if isLinked and not hasCompMatch(eid, LC, nil, pickupLua, pickup[pickupLua]) then
-            EntityAddComponent2(eid, LC, pickup)
+        local pickup = isWand(seen.item) and pickupWand or pickupFlask
+        if isLinked and not hasCompMatch(seen.item, LC, nil, pickupLua, pickup[pickupLua]) then
+            EntityAddComponent2(seen.item, LC, pickup)
         else
-            toggleFirstCompMatching(eid, LC, nil, pickupLua, pickup[pickupLua], isLinked)
+            toggleFirstCompMatching(seen.item, LC, nil, pickupLua, pickup[pickupLua], isLinked)
         end
     end
 
     -- handle adding or removing item from the altar children
-    local holder = linkOrSever(altar, eid, isLinked)
+    local holder = makeHolderLink(altar, seen)
 
     -- enable particle emitters on linked items, these are the "new item" particles
-    eachComponentSet(eid, SPEC, nil, "velocity_always_away_from_center", isLinked)
+    eachComponentSet(seen.item, SPEC, nil, "velocity_always_away_from_center", isLinked)
 
     return holder
-end
-
----Return the new entity holder representing the link, or 0 if severed.
----@param altar integer the altar linking or severing the relationship
----@param eid integer the item being linked or severed
----@param isLinking boolean whether the relationship is linking or severing
----@return integer eid belonging to the holder
-function linkOrSever(altar, eid, isLinking)
-    if isLinking then return linkItemToAltar(altar, eid) end
-    sever(altar, eid)
-    return 0
 end
 
 local upperAltarTag = "offeringsUpperAltar"

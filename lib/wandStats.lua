@@ -27,7 +27,11 @@ function isWand(eid) return EntityHasTag(eid, "wand") end
 
 function isWandEnhancer(eid) return isWand(eid) end
 
+---Sets the result of the flask item in scope to the stats provided.
+---@param wand integer
+---@param wandStats WandStats|nil
 function setWandResult(wand, wandStats)
+    if not wandStats then return end
     local ability = firstComponent(wand, "AbilityComponent", nil)
     if not ability then return end
     for _, def in ipairs(wandStatDefs) do
@@ -103,27 +107,29 @@ end
 ---be factored in the formula. The result will be a combined WandStats
 ---@param upperAltar number
 ---@param lowerAltar number
----@return WandStats
+---@return WandStats|nil
 function mergeWandStats(upperAltar, lowerAltar)
-    local result = holderWandStats(upperAltar)[1]
-    thonk.about("upper altar wand holder stats", result)
-    if lowerAltar == 0 then return result end
+    local upperWandStats = holderWandStats(upperAltar)
+    thonk.about("upper altar wand holder stats", upperWandStats)
+    if #upperWandStats == 0 then return nil end
+    if lowerAltar == 0 then return upperWandStats[1] end
 
     local offerings = holderWandStats(lowerAltar)
     thonk.about("lower altar (offerings) wand holder stats", offerings)
-    injectWandStatsIntoWandStats(result, offerings)
+    injectWandStatsIntoWandStats(upperWandStats[1], offerings)
     --thonk.about("results before blend", result, "offerings before blend", offerings)
 
-    local blended = blend(result)
+    local blended = blend(upperWandStats[1])
 
     --thonk.about("blended wand result", blended)
     return blended
 end
 
 ---Take WandStats and blend each based on "formula"
----@param stats WandStats
----@return WandStats
+---@param stats WandStats|nil
+---@return WandStats|nil
 function blend(stats)
+    if not stats then return nil end
     local result = newWandStats()
     for _, def in ipairs(wandStatDefs) do
         local pool = stats[def.prop]
@@ -167,45 +173,33 @@ end
 
 ---Store a wand's stats in a holder linking to the item.
 ---@param eid number the wand being added to the altar
----@param holder number the holder of the wand representative
-function storeWandStats(eid, holder)
-    --thonk.about("storing wand stats of", eid, "on holder", holder)
-    --thonk.about("holder stored eid", storedInt(holder, "eid", true))
+---@param hid number the holder of the wand representative
+function storeWandStats(eid, hid)
+    thonk.about("storing wand stats of", eid, "on holder", hid)
+    thonk.about("holder stored eid", storedInt(hid, "eid"))
     -- if the holder doesn't align DO NOT overwrite its stats
-    if storedInt(holder, "eid") ~= eid then return end
-    local ability = firstComponent(holder, "AbilityComponent", nil)
-    --thonk.about("holder ability component exists?", ability ~= nil, "ability", ability)
+    if storedInt(hid, "eid") ~= eid then return end
+    local ability = firstComponent(hid, "AbilityComponent", nil)
+    thonk.about("holder ability component exists?", ability ~= nil, "ability", ability)
     -- if the holder already has a stat block ALSO don't overwrite it.
-    if firstComponent(holder, "AbilityComponent", nil) then return end
+    if ability then return end
 
     --thonk.about("storing wand stats from", eid, "on holder", holder)
     local stats = injectAbilityIntoWandStats(nil, eid)
-    EntityAddComponent2(holder, "AbilityComponent", {})
-    setWandResult(holder, stats)
+    EntityAddComponent2(hid, "AbilityComponent", {}) -- create empty ability component
+    setWandResult(hid, stats) -- set the empty ability component stats to be stored ones
 end
 
 ---Gather all the wand stats belonging to holder children of the altar.
 ---These are the holder stats, NOT the wands they represent.
 ---@param altar number the altar we want the stats of wands on
----@return number[] result an array of ability components
-function holderWandAbilities(altar)
+---@return WandStats[] result an array of ability components
+function holderWandStats(altar)
     local holders = EntityGetAllChildren(altar) or {}
     local result = {}
     for _, child in ipairs(holders) do
         local ability = firstComponent(child, "AbilityComponent", nil)
-        if ability then result[#result + 1] = ability end
-    end
-    return result
-end
-
----Gather all the wand stats belonging to holder children of the altar.
----@param altar number the altar we want the stats of wands on
----@return WandStats[] result an array of wand stats
-function holderWandStats(altar)
-    local abilities = holderWandAbilities(altar)
-    local result = {}
-    for _, ability in ipairs(abilities) do
-        result[#result + 1] = scrapeAbility(nil, ability)
+        if ability then result[#result + 1] = scrapeAbility(nil, ability) end
     end
     return result
 end
