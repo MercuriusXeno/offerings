@@ -122,6 +122,10 @@ end
 
 function entityIn(ex, ey, x, y, r, v) return ex >= x - r and ex <= x + r and ey >= y - v and ey <= y + v end
 
+---@class LinkMap
+---@field item integer
+---@field holder integer
+
 ---Returns already linked items belonging to the altar
 ---This returns the items, not the holders.
 ---@param altar integer The altar we're checking the links of
@@ -131,9 +135,9 @@ function linkedItems(altar, isSequence)
     local result = {}
     local children = EntityGetAllChildren(altar) or {}
     for i, child in ipairs(children) do
-        local eid = storedInt(child, "eid", true)
-        local index = isSequence and i or eid
-        if index ~= nil then result[index] = eid end
+        local linkMap = {item = storedInt(child, "eid") or 0, holder = child} ---@type LinkMap        
+        local index = isSequence and i or linkMap.item
+        if index ~= 0 then result[index] = linkMap end
     end
     return result
 end
@@ -173,6 +177,52 @@ function cullSeveredLinks(altar, linkables, alreadyLinked, beforeSeverFunc)
     end
 end
 
+---EntityKill DOES NOT kill the entity right away, so there's some cleanup
+---of comps needed before an update is coerced.
+---@param altar integer The altar of the item that was severed.
+---@param eid integer The item that was severed
+function sever(altar, eid)    
+    -- if this is the upper altar
+    local holders = EntityGetAllChildren(altar) or {}
+    local killId = 0
+    for _, hid in ipairs(holders) do
+        if storedInt(hid, "eid") == eid then
+            killId = hid
+            --thonk.about("killing holder", hid)
+        end
+    end
+    if killId ~= 0 then
+        removeAll(killId, VSC, nil)
+        removeAll(killId, "AbilityComponent", nil)
+        EntityKill(killId)
+    end
+    local upperAltar = upperAltarNear(altar)
+    local upperItems = #linkedItems(upperAltar, true)
+    if upperItems > 0 then
+        forceUpdates(altar, eid)
+    end
+end
+
+function forceUpdates(altar, eid, isResetting)
+    --thonk.about("forcing update from altar", altar, "from id severance", eid)
+    -- ALWAYS recalc after a severance.
+    local upperAltar = upperAltarNear(altar)
+    local lowerAltar = lowerAltarNear(altar)
+    local combined = {}
+    if isWand(eid) then
+        if not isResetting then
+            combined = mergeWandStats(upperAltar, lowerAltar)
+        end
+        --thonk.about("combined stats after severance recalc", combined)
+        setWandResult(targetOfAltar(upperAltar), combined)
+    end
+    if isFlask(eid) then
+        if not isResetting then
+            combined = mergeWandStats(upperAltar, lowerAltar)
+        end
+        setFlaskResult(targetOfAltar(upperAltar), combined)
+    end
+end
 
 ---If the x, y of a missing entity id matches a found one
 ---we naively assume that is the entity "from before".
@@ -185,7 +235,7 @@ function relink(altar, eid, found)
     local holders = EntityGetAllChildren(altar) or {}
     local relinkId = 0
     for _, hid in ipairs(holders) do
-        if storedInt(hid, "eid", true) == eid then
+        if storedInt(hid, "eid") == eid then
             relinkId = hid
             --thonk.about("killing holder", hid)
         end
@@ -195,9 +245,10 @@ function relink(altar, eid, found)
         storeInt(relinkId, "eid", found)
     end
     local upperAltar = upperAltarNear(altar)
-    -- if the altar is the upper altar *rewrite* its stats back
-    -- to the original item using the holder wand stats.
-    if upperItems > 0 then
+    -- if the item being relinked is the upper altar
+    -- our objective is to *reset* the upper altar, not
+    -- to regenerate the stats. It will have lost its originals.
+    if upperAltar == altar then
         forceUpdates(altar, eid)
     end
 end
@@ -303,48 +354,6 @@ function handleAltarLink(altar, isUpper, eid, isLinked)
     eachComponentSet(eid, SPEC, nil, "velocity_always_away_from_center", isLinked)
 
     return holder
-end
-
----EntityKill DOES NOT kill the entity right away, so there's some cleanup
----of comps needed before an update is coerced.
----@param altar integer The altar of the item that was severed.
----@param eid integer The item that was severed
-function sever(altar, eid)    
-    -- if this is the upper altar
-    local holders = EntityGetAllChildren(altar) or {}
-    local killId = 0
-    for _, hid in ipairs(holders) do
-        if storedInt(hid, "eid", true) == eid then
-            killId = hid
-            --thonk.about("killing holder", hid)
-        end
-    end
-    if killId ~= 0 then
-        removeAll(killId, VSC, nil)
-        removeAll(killId, "AbilityComponent", nil)
-        EntityKill(killId)
-    end
-    local upperAltar = upperAltarNear(altar)
-    local upperItems = #linkedItems(upperAltar, true)
-    if upperItems > 0 then
-        forceUpdates(altar, eid)
-    end
-end
-
-function forceUpdates(altar, eid)
-    --thonk.about("forcing update from altar", altar, "from id severance", eid)
-    -- ALWAYS recalc after a severance.
-    local upperAltar = upperAltarNear(altar)
-    local lowerAltar = lowerAltarNear(altar)
-    if isWand(eid) then
-        combined = mergeWandStats(upperAltar, lowerAltar)
-        --thonk.about("combined stats after severance recalc", combined)
-        setWandResult(targetOfAltar(upperAltar), combined)
-    end
-    if isFlask(eid) then
-        combined = mergeWandStats(upperAltar, lowerAltar)
-        setFlaskResult(targetOfAltar(upperAltar), combined)
-    end
 end
 
 ---Return the new entity holder representing the link, or 0 if severed.

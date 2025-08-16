@@ -231,14 +231,21 @@ function dropStoredLike(eid, field, val) removeLike(eid, VSC, nil, field, val) e
 -- vsc storage abstractions to make it kinda brainless - excludes name on purpose
 local vscFields = { "value_int", "value_string", "value_bool", "value_float" }
 
----Returns value or vsc table
+---Returns value of vsc table, unboxed
 ---@param comp number|nil
----@param isValueOnly boolean
+---@param specificField string
+---@return any|nil
+function unboxVsc(comp, specificField)
+  if not comp then return nil end
+  return cGet(comp, specificField)
+end
+
+---Returns value in vsc table, still boxed
+---@param comp number|nil
 ---@param specificField string
 ---@return nil|any|table
-function unboxVsc(comp, isValueOnly, specificField)
+function boxVsc(comp, specificField)
   if not comp then return nil end
-  if isValueOnly then return cGet(comp, specificField) end
   local t = {}
   local function push(field) t[field] = cGet(comp, field) end
   push("name") -- always push name!
@@ -246,24 +253,82 @@ function unboxVsc(comp, isValueOnly, specificField)
   return t
 end
 
-function storedMatching(eid, name, isValueOnly, specificField)
+function storedMatching(eid, name, specificField)
   local vscs = {}
   local function push(_, comp)
-    local v = unboxVsc(comp, isValueOnly, specificField)
+    local v = unboxVsc(comp, specificField)
     vscs[#vscs + 1] = v
   end
   eachEntityComponentMatching(eid, VSC, nil, "name", name, push)
   return vscs
 end
 
-function firstStored(eid, name, isValueOnly, specificField)
-  return unboxVsc(firstComponentMatching(eid, VSC, nil, "name", name), isValueOnly, specificField)
-end
-
-function storedsLike(eid, name, isValueOnly, specificField, isSkippingZero)
+function storedBoxedMatching(eid, name, specificField)
   local vscs = {}
   local function push(_, comp)
-    local vsc = unboxVsc(comp, isValueOnly, specificField)
+    local v = boxVsc(comp, specificField)
+    vscs[#vscs + 1] = v
+  end
+  eachEntityComponentMatching(eid, VSC, nil, "name", name, push)
+  return vscs
+end
+
+function storedUnboxedMatching(eid, name, specificField)
+  local vscs = {}
+  local function push(_, comp)
+    local v = unboxVsc(comp, specificField)
+    vscs[#vscs + 1] = v
+  end
+  eachEntityComponentMatching(eid, VSC, nil, "name", name, push)
+  return vscs
+end
+
+---Return the first vsc which is a map for this name
+---@param eid integer The entity we're getting the vsc from
+---@param name string the name of the vsc to match by
+---@param specificField string which vsc field to scrape out
+---@return any value The value the vsc field specified returns
+function firstStored(eid, name, specificField)
+  return unboxVsc(firstComponentMatching(eid, VSC, nil, "name", name), specificField)
+end
+
+---Return the first vsc which is a map for this name
+---@param eid integer The entity we're getting the vsc from
+---@param name string the name of the vsc to match by
+---@param specificField string which vsc field to scrape out
+---@return table value The value the vsc field specified returns
+function firstStoredBoxed(eid, name, specificField)
+  return boxVsc(firstComponentMatching(eid, VSC, nil, "name", name), specificField)
+end
+
+---Stored vsc VALUES on the entity matching a likeness of a name
+---@param eid integer The entity we're looking for vscs in
+---@param name string the name of the vsc we are comparing to our match likeness
+---@param specificField string the field we want to pull from the vsc
+---@param isSkippingZero boolean whether to omit vsc values of 0
+---@return any[] sequence of values belonging to (scraped from) the vscs requested
+function storedsLike(eid, name, specificField, isSkippingZero)
+  local vscs = {}
+  local function push(_, comp)
+    local vsc = unboxVsc(comp, specificField)
+    if not isSkippingZero or (specificField ~= nil and vsc[specificField] ~= 0) then
+      vscs[#vscs + 1] = vsc
+    end
+  end
+  eachEntityComponentLike(eid, VSC, nil, "name", name, push)
+  return vscs
+end
+
+---Stored vscs on the entity matching a likeness of a name
+---@param eid integer The entity we're looking for vscs in
+---@param name string the name of the vsc we are comparing to our match likeness
+---@param specificField string the field we want to pull from the vsc
+---@param isSkippingZero boolean whether to omit vsc values of 0
+---@return table table of vsc-like objects containing the values
+function storedsBoxedLike(eid, name, specificField, isSkippingZero)
+  local vscs = {}
+  local function push(_, comp)
+    local vsc = boxVsc(comp, specificField)
     if not isSkippingZero or (specificField ~= nil and vsc[specificField] ~= 0) then
       vscs[#vscs + 1] = vsc
     end
@@ -277,17 +342,21 @@ function storeInt(eid, name, val) store(eid, name, "value_int", val) end
 
 function storeFloat(eid, name, val) store(eid, name, "value_float", val) end
 
----Returns the stored integer of a component (VSC) with an option to only have the value
----in case you're storing other stuff on the VSC you want alongside it.
+---Returns the stored integer of a component (VSC) as an unboxed vsc
 ---@param eid integer the entity we want the int from
 ---@param name string the name of the vsc we're after
----@param isValueOnly boolean whether to return only the value or an unboxed vsc table
----@return nil|table|integer tableOrInt if we are returning value only we return an int, otherwise vsc table
-function storedInt(eid, name, isValueOnly) return firstStored(eid, name, isValueOnly, "value_int") end
+---@return nil|table tableOrNil the vsc table of the match for this int or nil
+function storedIntBoxed(eid, name) return firstStoredBoxed(eid, name, "value_int") end
 
-function storedFloat(eid, name, isValueOnly) return firstStored(eid, name, isValueOnly, "value_float") end
+---Returns the stored integer of a component (VSC) as a value only
+---@param eid integer the entity we want the int from
+---@param name string the name of the vsc we're after
+---@return nil|integer intOrNil return an int value or nil
+function storedInt(eid, name) return firstStored(eid, name, "value_int") end
 
-function storedIntsArray(eid, name) return storedMatching(eid, name, true, "value_int") end
+function storedFloat(eid, name) return firstStored(eid, name, "value_float") end
+
+function storedIntsArray(eid, name) return storedMatching(eid, name, "value_int") end
 
 function clearOriginalStats(altar) removeLike(altar, VSC, nil, "name", originalStats) end
 

@@ -16,7 +16,7 @@ end
 ---@param ... any
 function bOut(...)
     local r = { }
-    rOut(r, ...)
+    rOut(r, 0, ...)
     for _, s in ipairs(r) do debugOut(s) end
 end
 
@@ -24,24 +24,24 @@ end
 ---of varargs inject strings in the array to do a recursive debug out
 ---@param r string[]
 ---@param ... any
-function rOut(r, ...)
+function rOut(r, d, ...)
     local i = 1
     local n = select("#", ...)
     while i < n do
+        local pad = d > 0 and string.rep("  ", d) or ""
         local p = select(i, ...)
         local a = select(i + 1, ...)
         if type(a) == "table" then
-            r[#r+1] = p .. " {"
+            r[#r+1] = pad..p
             local varargs = {}
             for k, v in pairs(a) do
                 varargs[#varargs+1] = k
                 varargs[#varargs+1] = v
             end
-            rOut(r, unpack(varargs))
-            r[#r+1] = "}"
+            rOut(r, d + 1, unpack(varargs))
         else
             local s = type(a) == "string" and a or tostring(a)
-            r[#r+1] = p .. " " .. s .. ""
+            r[#r+1] = pad .. p .. " " .. s
         end
         i = i + 2
     end

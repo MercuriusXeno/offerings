@@ -135,7 +135,7 @@ function blend(stats)
             local worst = table.remove(pool, 1)
             local next_worst = table.remove(pool, 1)
             if def.formula == "loop" then
-                poolInject(pool, next_worst + ((worst / next_worst) ^ 0.5) * worst)
+                poolInject(pool, math.ceil(next_worst + ((worst / next_worst) ^ 0.5) * worst))
             elseif def.formula == "min" then
                 poolInject(pool, math.min(worst, next_worst))
             elseif def.formula == "max" then
@@ -172,7 +172,7 @@ function storeWandStats(eid, holder)
     --thonk.about("storing wand stats of", eid, "on holder", holder)
     --thonk.about("holder stored eid", storedInt(holder, "eid", true))
     -- if the holder doesn't align DO NOT overwrite its stats
-    if storedInt(holder, "eid", true) ~= eid then return end
+    if storedInt(holder, "eid") ~= eid then return end
     local ability = firstComponent(holder, "AbilityComponent", nil)
     --thonk.about("holder ability component exists?", ability ~= nil, "ability", ability)
     -- if the holder already has a stat block ALSO don't overwrite it.

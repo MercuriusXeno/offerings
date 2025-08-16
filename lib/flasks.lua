@@ -194,13 +194,13 @@ end
 
 function originalFlask(altar)
     return {
-        materials = materializeMaterials(storedsLike(altar, prefMat(""), false, "value_int", true)),
-        enchantments = materializeEnchants(storedsLike(altar, prefEnch(""), false, "value_int", true)),
-        barrel_size = storedInt(altar, prefOg("barrel_size"), true),
-        num_cells_sucked_per_frame = storedInt(altar, prefOg("num_cells_sucked_per_frame"), true),
-        spray_velocity_coeff = storedFloat(altar, prefOg("spray_velocity_coeff"), true),
-        spray_velocity_normalized_min = storedFloat(altar, prefOg("spray_velocity_normalized_min"), true),
-        throw_how_many = storedInt(altar, prefOg("throw_how_many"), true)
+        materials = materializeMaterials(storedsBoxedLike(altar, prefMat(""), "value_int", true)),
+        enchantments = materializeEnchants(storedsBoxedLike(altar, prefEnch(""), "value_int", true)),
+        barrel_size = storedInt(altar, prefOg("barrel_size")),
+        num_cells_sucked_per_frame = storedInt(altar, prefOg("num_cells_sucked_per_frame")),
+        spray_velocity_coeff = storedFloat(altar, prefOg("spray_velocity_coeff")),
+        spray_velocity_normalized_min = storedFloat(altar, prefOg("spray_velocity_normalized_min")),
+        throw_how_many = storedInt(altar, prefOg("throw_how_many"))
     }
 end
 
