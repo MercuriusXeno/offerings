@@ -53,8 +53,4 @@
   >
   </ParticleEmitterComponent>
   <LightComponent _enabled="0" update_properties="1" r="255" g="178" b="118" radius="29" />
-  <LuaComponent
-    execute_every_n_frame="1"
-    script_source_file="mods/offerings/entity/offer_scan.lua">
-  </LuaComponent>
 </Entity>

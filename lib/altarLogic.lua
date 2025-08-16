@@ -7,7 +7,6 @@ dofile_once("mods/offerings/lib/wandStats.lua")
 
 local thonk = dofile("mods/offerings/lib/thonk.lua") ---@type Thonk
 
-
 ---@class SeenItem
 ---@field item integer
 ---@field x number
@@ -48,6 +47,23 @@ local pickupWand = {
     mTimesExecutedThisFrame = 0
 }
 
+local upperAltarTag = "offeringsUpperAltar"
+local lowerAltarTag = "offeringsLowerAltar"
+
+function isUpperAltar(eid) return EntityHasTag(eid, upperAltarTag) end
+
+function isLowerAltar(eid) return EntityHasTag(eid, lowerAltarTag) end
+
+function isAltar(eid) return isUpperAltar(eid) or isLowerAltar(eid) end
+
+function upperAltarNear(eid) return closestToEntity(eid, upperAltarTag) end
+
+function lowerAltarNear(eid) return closestToEntity(eid, lowerAltarTag) end
+
+function toggleAltarRunes(altar, isLitUp)
+    toggleFirstCompMatching(altar, PEC, nil, "gravity", { 0, 0 }, isLitUp)
+end
+
 ---Executes a linking function and a severing function when the
 ---requirements for either is met, which depends on the altar calling it.
 ---@param altar integer the altar id running the scan
@@ -82,6 +98,83 @@ function scanForLinkableItems(altar, isUpper, linkFunc, beforeSeverFunc)
     end
     -- these lights ALSO turn off if the player goes away
     toggleFirstCompMatching(altar, PEC, nil, "gravity", { 0, 0 }, hasAnyLink)
+end
+
+function isValidTarget(eid) return isWand(eid) or isFlask(eid) end
+
+---Handles the logic of determining an object is a valid altar target
+---for the upper altar and linking it if possible.
+---@param upperAltar integer The altar to target items with
+---@param seen SeenItem an item or entity id in the altar's collision field
+---@return boolean isNewLinkFormed whether the altar found a new link
+function targetLinkFunc(upperAltar, seen)
+    if targetOfAltar(upperAltar) ~= nil then return false end
+    if not isValidTarget(seen.item) then return false end
+    local holder = altarLinkToSeenItem(upperAltar, true, seen)
+    thonk.about("holder", holder, "holder wand", seen.item)
+    if isWand(seen.item) then
+        storeWandStats(seen.item, holder)
+        local combinedWands = mergeWandStats(upperAltar, lowerAltarNear(upperAltar))
+        setWandResult(seen.item, combinedWands)
+    elseif isFlask(seen.item) then
+        --thonk.about("holder", holder, "holder flask", eid)
+        storeFlaskStats(upperAltar, seen.item, holder)
+        local combinedFlasks = mergeFlaskStats(upperAltar, lowerAltarNear(upperAltar))
+        setFlaskResult(seen.item, combinedFlasks)
+    end
+    return true
+end
+
+---Before-sever-function for targets, restores them to their vanilla state.
+---@param altar integer The target altar restoring the item
+---@param eid integer The item id being restored
+function restoreTargetOriginalStats(altar, eid)
+    thonk.about("restoring item ", eid)
+    if isWand(eid) then
+        local combinedWands = mergeWandStats(altar, 0)
+        setWandResult(eid, combinedWands)
+    elseif isFlask(eid) then
+        local combinedFlasks = mergeFlaskStats(altar, 0)
+        setFlaskResult(eid, combinedFlasks)
+    end
+end
+
+function isWandMatch(target, offer) return isWand(target) and isWandEnhancer(offer) end
+
+function isFlaskMatch(target, offer) return isFlask(target) and isFlaskEnhancer(offer) end
+
+---Test that the target can be improved by the offering
+---@param target integer The linked item on the upper altar
+---@param eid integer A lower altar potential linked item
+---@return boolean result true if the target can consume the offering, otherwise false
+function isValidOffer(target, eid) return isWandMatch(target, eid) or isFlaskMatch(target, eid) end
+
+---Handles the logic of determining an object is a valid offering
+---for the lower altar and linking it if possible.
+---@param lowerAltar integer The altar to sacrifice items with
+---@param seen SeenItem an item or entity id in the altar's collision field
+---@return boolean isNewLinkFormed whether the altar found a new link
+function offerLinkFunc(lowerAltar, seen)
+    local upperAltar = upperAltarNear(lowerAltar)
+    local target = targetOfAltar(upperAltar)
+    if target == nil then return false end
+    --thonk.about("target", target)
+    if not isValidOffer(target.item, seen.item) then return false end
+    local holder = altarLinkToSeenItem(lowerAltar, false, seen)
+    if isWand(seen.item) then
+        if holder ~= 0 then storeWandStats(seen.item, holder) end
+        combined = mergeWandStats(upperAltar, lowerAltar)
+        setWandResult(target.item, combined)
+    end
+    if isFlask(seen.item) then
+        if holder ~= 0 then storeFlaskStats(lowerAltar, seen.item, holder) end
+        combined = mergeFlaskStats(upperAltar, lowerAltar)
+        setFlaskResult(target.item, combined)
+    end
+    return true
+end
+
+function offerSeverNoop(lowerAltar, eid)
 end
 
 ---Find the missing links in our already linked items, returning those unseen by the loop
@@ -390,21 +483,4 @@ function altarLinkToSeenItem(altar, isUpper, seen)
     eachComponentSet(seen.item, SPEC, nil, "velocity_always_away_from_center", isLinked)
 
     return holder
-end
-
-local upperAltarTag = "offeringsUpperAltar"
-local lowerAltarTag = "offeringsLowerAltar"
-
-function isUpperAltar(eid) return EntityHasTag(eid, upperAltarTag) end
-
-function isLowerAltar(eid) return EntityHasTag(eid, lowerAltarTag) end
-
-function isAltar(eid) return isUpperAltar(eid) or isLowerAltar(eid) end
-
-function upperAltarNear(eid) return closestToEntity(eid, upperAltarTag) end
-
-function lowerAltarNear(eid) return closestToEntity(eid, lowerAltarTag) end
-
-function toggleAltarRunes(altar, isLitUp)
-    toggleFirstCompMatching(altar, PEC, nil, "gravity", { 0, 0 }, isLitUp)
 end

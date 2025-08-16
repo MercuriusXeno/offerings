@@ -55,6 +55,6 @@
   <LightComponent _enabled="0" update_properties="1" r="0" g="128" b="128" radius="13" />
   <LuaComponent
     execute_every_n_frame="1"
-    script_source_file="mods/offerings/entity/target_scan.lua">
+    script_source_file="mods/offerings/entity/altar.lua">
   </LuaComponent>
 </Entity>
