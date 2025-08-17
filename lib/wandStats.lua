@@ -7,6 +7,7 @@ local thonk = dofile("mods/offerings/lib/thonk.lua") ---@type Thonk
 ---@field deck_capacity integer[] -- gun_config
 ---@field mana_max integer[] -- no obj
 ---@field mana_charge_speed integer[] -- no obj
+---@field shuffle_deck_when_empty integer[] -- gun_config abused boolean lol
 
 ---@class WandStatDef
 ---@field prop string
@@ -15,12 +16,13 @@ local thonk = dofile("mods/offerings/lib/thonk.lua") ---@type Thonk
 
 ---@type WandStatDef[]
 local wandStatDefs = {
-    { prop = "fire_rate_wait",    obj = "gunaction_config", formula = "min" },
-    { prop = "reload_time",       obj = "gun_config",       formula = "min" },
-    { prop = "spread_degrees",    obj = "gunaction_config", formula = "min" },
-    { prop = "deck_capacity",     obj = "gun_config",       formula = "max" },
-    { prop = "mana_max",          obj = nil,                formula = "loop" },
-    { prop = "mana_charge_speed", obj = nil,                formula = "loop" }
+    { prop = "fire_rate_wait",          obj = "gunaction_config", formula = "min" },
+    { prop = "reload_time",             obj = "gun_config",       formula = "min" },
+    { prop = "spread_degrees",          obj = "gunaction_config", formula = "min" },
+    { prop = "deck_capacity",           obj = "gun_config",       formula = "max" },
+    { prop = "mana_max",                obj = nil,                formula = "loop" },
+    { prop = "mana_charge_speed",       obj = nil,                formula = "loop" },
+    { prop = "shuffle_deck_when_empty", obj = "gun_config",       formula = "min" },
 }
 
 function isWand(eid) return EntityHasTag(eid, "wand") end
@@ -28,7 +30,7 @@ function isWand(eid) return EntityHasTag(eid, "wand") end
 function isWandEnhancer(eid) return isWand(eid) end
 
 ---Sets the result of the flask item in scope to the stats provided.
----@param wand integer
+---@param wand entity_id
 ---@param wandStats WandStats|nil
 function setWandResult(wand, wandStats)
     if not wandStats then return end
@@ -37,6 +39,7 @@ function setWandResult(wand, wandStats)
     for _, def in ipairs(wandStatDefs) do
         local pool = wandStats[def.prop]
         local value = pool[1]
+        if def.prop == "shuffle_deck_when_empty" then value = (value == 1) end
         if def.obj then
             cObjSet(ability, def.obj, def.prop, value)
         else
@@ -54,18 +57,26 @@ function newWandStats()
         mana_charge_speed = {},
         mana_max = {},
         reload_time = {},
-        spread_degrees = {}
-    }
+        spread_degrees = {},
+        shuffle_deck_when_empty = {}
+    } ---@type WandStats
 end
 
 ---Scrape the ability component for wand stats.
 ---@param wandStats WandStats|nil An existing wand stats or nil to create a new one.
----@param comp number An ability component id
+---@param comp component_id An ability component id
 function scrapeAbility(wandStats, comp)
     if wandStats == nil then wandStats = newWandStats() end
     for _, def in ipairs(wandStatDefs) do
         local innerObj = def.obj ~= nil and def.obj or "root"
-        local value = innerObj ~= "root" and cObjGet(comp, def.obj, def.prop) or cGet(comp, def.prop)
+        local value = nil
+        if innerObj ~= "root" then
+            value = cObjGet(comp, def.obj, def.prop)
+        else
+            value = cGet(comp, def.prop)
+        end
+        --thonk.about("def prop", def.prop, "value", value)
+        if type(value) == "boolean" then value = value and 1 or 0 end
         table.insert(wandStats[def.prop], value)
     end
     return wandStats
@@ -73,7 +84,7 @@ end
 
 ---Scrape the stats out of a wand or holder's ability component(s)
 ---@param wandStats WandStats|nil an existing wandstats, or nil to create one.
----@param eid integer Any wand or holder with ability component(s)
+---@param eid entity_id Any wand or holder with ability component(s)
 ---@return WandStats
 function injectAbilityIntoWandStats(wandStats, eid)
     if wandStats == nil then wandStats = newWandStats() end
@@ -105,21 +116,21 @@ end
 ---This can be used to restore the target item to its original values
 ---by passing a 0 for the lower altar, which causes no lower items to
 ---be factored in the formula. The result will be a combined WandStats
----@param upperAltar number
----@param lowerAltar number
+---@param upperAltar entity_id
+---@param lowerAltar entity_id|nil
 ---@return WandStats|nil
 function mergeWandStats(upperAltar, lowerAltar)
     local upperWandStats = holderWandStats(upperAltar)
-    thonk.about("upper altar wand holder stats", upperWandStats)
+    --thonk.about("upper altar wand holder stats", upperWandStats)
     if #upperWandStats == 0 then return nil end
-    if lowerAltar == 0 then return upperWandStats[1] end
+    if not lowerAltar then return upperWandStats[1] end
 
     local offerings = holderWandStats(lowerAltar)
-    thonk.about("lower altar (offerings) wand holder stats", offerings)
+    --thonk.about("lower altar (offerings) wand holder stats", offerings)
     injectWandStatsIntoWandStats(upperWandStats[1], offerings)
-    --thonk.about("results before blend", result, "offerings before blend", offerings)
+    --thonk.about("results before blend", upperWandStats[1], "offerings before blend", offerings)
 
-    local blended = blend(upperWandStats[1])
+    local blended = blendWandStats(upperWandStats[1])
 
     --thonk.about("blended wand result", blended)
     return blended
@@ -128,7 +139,7 @@ end
 ---Take WandStats and blend each based on "formula"
 ---@param stats WandStats|nil
 ---@return WandStats|nil
-function blend(stats)
+function blendWandStats(stats)
     if not stats then return nil end
     local result = newWandStats()
     for _, def in ipairs(wandStatDefs) do
@@ -172,27 +183,27 @@ function poolInject(pool, merged)
 end
 
 ---Store a wand's stats in a holder linking to the item.
----@param eid number the wand being added to the altar
----@param hid number the holder of the wand representative
+---@param eid entity_id the wand being added to the altar
+---@param hid entity_id the holder of the wand representative
 function storeWandStats(eid, hid)
-    thonk.about("storing wand stats of", eid, "on holder", hid)
-    thonk.about("holder stored eid", storedInt(hid, "eid"))
+    --thonk.about("storing wand stats of", eid, "on holder", hid)
+    --thonk.about("holder stored eid", storedInt(hid, "eid"))
     -- if the holder doesn't align DO NOT overwrite its stats
     if storedInt(hid, "eid") ~= eid then return end
     local ability = firstComponent(hid, "AbilityComponent", nil)
-    thonk.about("holder ability component exists?", ability ~= nil, "ability", ability)
+    --thonk.about("holder ability component exists?", ability ~= nil, "ability", ability)
     -- if the holder already has a stat block ALSO don't overwrite it.
     if ability then return end
 
     --thonk.about("storing wand stats from", eid, "on holder", holder)
     local stats = injectAbilityIntoWandStats(nil, eid)
     EntityAddComponent2(hid, "AbilityComponent", {}) -- create empty ability component
-    setWandResult(hid, stats) -- set the empty ability component stats to be stored ones
+    setWandResult(hid, stats)                        -- set the empty ability component stats to be stored ones
 end
 
 ---Gather all the wand stats belonging to holder children of the altar.
 ---These are the holder stats, NOT the wands they represent.
----@param altar number the altar we want the stats of wands on
+---@param altar entity_id the altar we want the stats of wands on
 ---@return WandStats[] result an array of ability components
 function holderWandStats(altar)
     local holders = EntityGetAllChildren(altar) or {}

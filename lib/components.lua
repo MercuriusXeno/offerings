@@ -7,7 +7,7 @@ local VSC = "VariableStorageComponent"
 local originalStats = "original_stats_"
 
 ---For each entity component, execute a function
----@param eid integer the entity we are looping components of
+---@param eid entity_id the entity we are looping components of
 ---@param ctype string which components to find
 ---@param tag string|nil the tag of the component to filter by or nil
 function componentsOfType(eid, ctype, tag)
@@ -19,10 +19,10 @@ function componentsOfType(eid, ctype, tag)
 end
 
 ---For each entity component, execute a function
----@param eid integer the entity we are looping components of
+---@param eid entity_id the entity we are looping components of
 ---@param ctype string which components to find
 ---@param tag string|nil the tag of the component to filter by or nil
----@param pred fun(comp: integer) the predicate against each component
+---@param pred fun(comp: component_id) the predicate against each component
 function componentsWhere(eid, ctype, tag, pred)
   local arr = {}
   local function push(comp) arr[#arr + 1] = comp end
@@ -33,7 +33,7 @@ function componentsWhere(eid, ctype, tag, pred)
 end
 
 ---Return a collection of components of a type whose field matches a value
----@param eid integer the entity we are looping components of
+---@param eid entity_id the entity we are looping components of
 ---@param ctype string which components to find
 ---@param tag string|nil the tag of the component to filter by or nil
 ---@param field string the field name to test a match for
@@ -44,7 +44,7 @@ function componentsMatching(eid, ctype, tag, field, val)
 end
 
 ---Return a collection of components of a type whose field contains a value
----@param eid integer the entity we are looping components of
+---@param eid entity_id the entity we are looping components of
 ---@param ctype string which components to find
 ---@param tag string|nil the tag of the component to filter by or nil
 ---@param field string the field name to test a match for
@@ -55,10 +55,10 @@ function componentsLike(eid, ctype, tag, field, val)
 end
 
 ---For each entity component, execute a function
----@param eid integer the entity we are looping components of
+---@param eid entity_id the entity we are looping components of
 ---@param ctype string which components to find
 ---@param tag string|nil the tag of the component to filter by or nil
----@param func fun(eid: integer, comp: integer) the function to execute on each component
+---@param func fun(eid: entity_id, comp: component_id) the function to execute on each component
 function eachEntityComponent(eid, ctype, tag, func)
   for _, comp in ipairs(componentsOfType(eid, ctype, tag)) do func(eid, comp) end
 end
@@ -94,10 +94,10 @@ function removeLike(eid, ctype, tag, field, val)
 end
 
 ---Returns the first component matching ctype with tag, optional
----@param eid integer
+---@param eid entity_id
 ---@param ctype string
 ---@param tag? string|nil
----@return number|nil componentId or nil if no component found
+---@return component_id|nil componentId or nil if no component found
 function firstComponent(eid, ctype, tag)
   if tag == nil then
     return EntityGetFirstComponentIncludingDisabled(eid, ctype) or nil
@@ -149,7 +149,7 @@ function toggleComps(eid, ctype, tag, isEnabled)
 end
 
 ---Return a collection of components of a type whose field matches a value
----@param eid integer the entity we are looping components of
+---@param eid entity_id the entity we are looping components of
 ---@param ctype string which components to find
 ---@param tag string|nil the tag of the component to filter by or nil
 ---@param func fun(comp: integer): boolean the function to determine each component is enabled
@@ -172,7 +172,7 @@ end
 
 ---Return the results of a component get which can be multipart (varargs)
 ---or a table or a single value. We render varargs into a table.+
----@param comp nil|integer the component we're scraping
+---@param comp nil|component_id the component we're scraping
 ---@param field string what field we're scraping, by name
 ---@return nil|table|any result the field result, can be a variety of things
 function cGet(comp, field)
@@ -228,11 +228,18 @@ end
 
 function dropStoredLike(eid, field, val) removeLike(eid, VSC, nil, field, val) end
 
+---@class Vsc
+---@field name? string|nil
+---@field value_int? integer|nil
+---@field value_bool? boolean|nil
+---@field value_float? number|nil
+---@field value_string? string|nil
+
 -- vsc storage abstractions to make it kinda brainless - excludes name on purpose
 local vscFields = { "value_int", "value_string", "value_bool", "value_float" }
 
 ---Returns value of vsc table, unboxed
----@param comp number|nil
+---@param comp component_id|nil
 ---@param specificField string
 ---@return any|nil
 function unboxVsc(comp, specificField)
@@ -241,10 +248,9 @@ function unboxVsc(comp, specificField)
 end
 
 ---Returns value in vsc table, still boxed
----@param comp number|nil
----@param specificField string
----@return nil|any|table
-function boxVsc(comp, specificField)
+---@param comp component_id|nil
+---@return nil|Vsc
+function boxVsc(comp)
   if not comp then return nil end
   local t = {}
   local function push(field) t[field] = cGet(comp, field) end
@@ -266,7 +272,7 @@ end
 function storedBoxedMatching(eid, name, specificField)
   local vscs = {}
   local function push(_, comp)
-    local v = boxVsc(comp, specificField)
+    local v = boxVsc(comp)
     vscs[#vscs + 1] = v
   end
   eachEntityComponentMatching(eid, VSC, nil, "name", name, push)
@@ -284,7 +290,7 @@ function storedUnboxedMatching(eid, name, specificField)
 end
 
 ---Return the first vsc which is a map for this name
----@param eid integer The entity we're getting the vsc from
+---@param eid entity_id The entity we're getting the vsc from
 ---@param name string the name of the vsc to match by
 ---@param specificField string which vsc field to scrape out
 ---@return any value The value the vsc field specified returns
@@ -293,16 +299,15 @@ function firstStored(eid, name, specificField)
 end
 
 ---Return the first vsc which is a map for this name
----@param eid integer The entity we're getting the vsc from
+---@param eid entity_id The entity we're getting the vsc from
 ---@param name string the name of the vsc to match by
----@param specificField string which vsc field to scrape out
----@return table value The value the vsc field specified returns
-function firstStoredBoxed(eid, name, specificField)
-  return boxVsc(firstComponentMatching(eid, VSC, nil, "name", name), specificField)
+---@return Vsc|nil value The value the vsc field specified returns
+function firstStoredBoxed(eid, name)
+  return boxVsc(firstComponentMatching(eid, VSC, nil, "name", name))
 end
 
 ---Stored vsc VALUES on the entity matching a likeness of a name
----@param eid integer The entity we're looking for vscs in
+---@param eid entity_id The entity we're looking for vscs in
 ---@param name string the name of the vsc we are comparing to our match likeness
 ---@param specificField string the field we want to pull from the vsc
 ---@param isSkippingZero boolean whether to omit vsc values of 0
@@ -320,16 +325,16 @@ function storedsLike(eid, name, specificField, isSkippingZero)
 end
 
 ---Stored vscs on the entity matching a likeness of a name
----@param eid integer The entity we're looking for vscs in
+---@param eid entity_id The entity we're looking for vscs in
 ---@param name string the name of the vsc we are comparing to our match likeness
 ---@param specificField string the field we want to pull from the vsc
 ---@param isSkippingZero boolean whether to omit vsc values of 0
----@return table table of vsc-like objects containing the values
+---@return Vsc[] table of vsc-like objects containing the values
 function storedsBoxedLike(eid, name, specificField, isSkippingZero)
   local vscs = {}
   local function push(_, comp)
-    local vsc = boxVsc(comp, specificField)
-    if not isSkippingZero or (specificField ~= nil and vsc[specificField] ~= 0) then
+    local vsc = boxVsc(comp)
+    if not isSkippingZero or (specificField ~= nil and vsc and vsc[specificField] ~= 0) then
       vscs[#vscs + 1] = vsc
     end
   end
@@ -343,13 +348,13 @@ function storeInt(eid, name, val) store(eid, name, "value_int", val) end
 function storeFloat(eid, name, val) store(eid, name, "value_float", val) end
 
 ---Returns the stored integer of a component (VSC) as an unboxed vsc
----@param eid integer the entity we want the int from
+---@param eid entity_id the entity we want the int from
 ---@param name string the name of the vsc we're after
 ---@return nil|table tableOrNil the vsc table of the match for this int or nil
-function storedIntBoxed(eid, name) return firstStoredBoxed(eid, name, "value_int") end
+function storedIntBoxed(eid, name) return firstStoredBoxed(eid, name) end
 
 ---Returns the stored integer of a component (VSC) as a value only
----@param eid integer the entity we want the int from
+---@param eid entity_id the entity we want the int from
 ---@param name string the name of the vsc we're after
 ---@return nil|integer intOrNil return an int value or nil
 function storedInt(eid, name) return firstStored(eid, name, "value_int") end

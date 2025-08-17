@@ -1,14 +1,6 @@
 dofile_once("mods/offerings/lib/components.lua")
 dofile_once("mods/offerings/lib/entities.lua")
 
----@class FlaskStats
----@field enchantments table
----@field barrel_size integer
----@field num_cells_sucked_per_frame integer
----@field spray_velocity_coeff number
----@field spray_velocity_normalized_min number
----@field throw_how_many integer
----@field materials table
 
 local enchantPrefix = "offering_flask_enchant_"
 local flask_enchant_loc_prefix = "$" .. enchantPrefix
@@ -35,9 +27,49 @@ local function prefEnch(s) return prefOg("enchant_" .. s) end
 local ENCH = #prefEnch("")
 local function unprefEnch(s) return unprefix(s, ENCH) end
 
--- list of enchantments of flasks and their detection item
-local enchants = {}
+---@class FlaskStatDef
+---@field key string
+---@field formula string
 
+local flaskStatDefs = {
+    { key = "enchantments", formula="group_sum" },
+    { key = "barrel_size", formula="sum" },
+    { key = "num_cells_sucked_per_frame", formula="sum" },
+    { key = "spray_velocity_coeff", formula="clamp_blend" },
+    { key = "spray_velocity_normalized_min", formula="clamp_blend" },
+    { key = "throw_how_many", formula="sum" },
+    { key = "materials", formula="group_sum" }
+} ---@type FlaskStatDef
+
+---@class FlaskStats
+---@field enchantments table<string, integer>
+---@field barrel_size integer[]
+---@field num_cells_sucked_per_frame integer[]
+---@field spray_velocity_coeff number[]
+---@field spray_velocity_normalized_min number[]
+---@field throw_how_many integer[]
+---@field materials table<integer, integer>
+
+-- list of enchantments of flasks and their detection item
+---@class FlaskEnchantDef
+---@field key string
+---@field evaluators (fun(eid: entity_id):integer)[]
+---@field min integer
+---@field max integer
+---@field apply fun(eid: entity_id, level: integer)
+---@field describe fun(stats: FlaskStats, key: string, level: integer)
+
+---@class FlaskEnchant
+---@field key string
+---@field level integer
+
+---@class Reactivity
+---@field chance integer
+---@field speed integer
+
+local flaskEnchantDefs = {} ---@type FlaskEnchantDef[]
+
+---Registers a flask enchantment definition to the array. Can be called externally
 function registerFlaskEnchantment(key, evaluators, min, max, apply, describe)
     local def = {
         key = key,
@@ -46,47 +78,29 @@ function registerFlaskEnchantment(key, evaluators, min, max, apply, describe)
         max = max,
         apply = apply,
         describe = describe
-    }
-    enchants[key] = def
+    } ---@type FlaskEnchantDef
+    flaskEnchantDefs[#flaskEnchantDefs + 1] = def
 end
 
 registerFlaskEnchantment("tempered", { brimstoneValue }, 0, 1, removeDamageModels, describeTempered)
 registerFlaskEnchantment("instant", { thunderstoneValue }, 0, 1, makeInstant, describeInstant)
 registerFlaskEnchantment("reactive", { scrollValue, tabletValue }, -1, 5, makeReactive, describeReactive)
-registerFlaskEnchantment("draining", { waterstoneValue }, 0, 1, makeDraining, describeDraining)
+registerFlaskEnchantment("draining", { ldcValue }, 0, 1, makeDraining, describeDraining)
 registerFlaskEnchantment("transmuting", { potionMimicValue }, 0, 1, makeTransmuting, describeTransmuting)
-
-function holderFlaskAbilities(altar)
-    local result = {}
-    local children = EntityGetAllChildren(altar) or {}
-    for _, child in ipairs(children) do
-        local ability = firstComponent(child, "AbilityComponent", nil)
-        result[#result + 1] = ability
-    end
-    return result
-end
 
 function isFlask(eid) return EntityHasTag(eid, "potion") or itemNamed(eid, "$item_cocktail") end
 
 function isFlaskEnhancer(eid) return isFlask(eid) or hasAnyEnchantValue(eid) end
 
-function flaskMaterials(eid)
-    if isFlask(eid) then
-        local comp = firstComponent(eid, MIC)
-        return cGet(comp, "count_per_material_type")
-    end
-    return {}
-end
-
-function sumEnchantPower(def, eid)
+function itemEnchantmentValue(def, eid)
     local r = 0
     for _, f in ipairs(def.evaluators) do r = r + f(eid) end
     return r
 end
 
 function hasAnyEnchantValue(eid)
-    for _, enchant in pairs(enchants) do
-        if sumEnchantPower(enchant, eid) ~= 0 then return true end
+    for _, enchant in pairs(flaskEnchantDefs) do
+        if itemEnchantmentValue(enchant, eid) ~= 0 then return true end
     end
     return false
 end
@@ -111,7 +125,7 @@ function thunderstoneValue(eid) return EntityHasTag(eid, "thunderstone") and 1 o
 
 function potionMimicValue(eid) return itemNamed(eid, "$item_potion_mimic") and 1 or 0 end
 
-function waterstoneValue(eid) return EntityHasTag(eid, "waterstone") and 1 or 0 end
+function ldcValue(eid) return EntityHasTag(eid, "waterstone") and 1 or 0 end
 
 function removeDamageModels(eid) removeAll(eid, "DamageModelComponent") end
 
@@ -125,7 +139,7 @@ function makeTransmuting(eid, level)
     storeInt(eid, key, level)
 end
 
-function makeInstant(eid)
+function makeInstant(eid, _)
     local barrel_size = valueOrDefault(eid, MSC, "barrel_size", 1000)
     local potionComp = firstComponent(eid, "PotionComponent")
     setValue(potionComp, "throw_bunch", true)
@@ -135,7 +149,7 @@ end
 function makeDraining(eid, level)
     local key = enchantPrefix .. "draining"
     removeMatch(eid, VSC, nil, "name", key)
-    storeInt(eid, key, level)
+    storeInt(eid, key, level) -- temporary draining flag
 end
 
 function locKey(s) return flask_enchant_loc_prefix .. s end
@@ -170,9 +184,9 @@ end
 
 function describeFlask(combined)
     local result = ""
-    for key, def in pairs(enchants) do
-        if combined.enchantments[key] and combined.enchantments[key] ~= 0 then
-            local enchDesc = def.describe(combined, key, combined.enchantments[key])
+    for _, def in ipairs(flaskEnchantDefs) do
+        if combined.enchantments[def.key] and combined.enchantments[def.key] ~= 0 then
+            local enchDesc = def.describe(combined, def.key, combined.enchantments[def.key])
             result = appendDescription(result, enchDesc)
         end
     end
@@ -187,9 +201,9 @@ function enchantLevel(eid, key)
     return cGet(firstComponentMatching(eid, VSC, nil, "name", enchantPrefix .. key), "value_int") or 0
 end
 
-function materialize(vscs, unpref, isMaterialOffset)
-end
-
+---Turns a collection of VSCs into a material table.
+---@param vscs Vsc[]
+---@return table<integer, integer>
 function materializeMaterials(vscs)
     local t = {}
     local function push(vsc)
@@ -202,6 +216,9 @@ function materializeMaterials(vscs)
     return t
 end
 
+---Turns a collection of VSCs into an enchantment level table.
+---@param vscs Vsc[]
+---@return table<string, integer>
 function materializeEnchants(vscs)
     local t = {}
     local function push(vsc)
@@ -211,79 +228,178 @@ function materializeEnchants(vscs)
     return t
 end
 
-function originalFlask(altar)
-    return {
-        materials = materializeMaterials(storedsBoxedLike(altar, prefMat(""), "value_int", true)),
-        enchantments = materializeEnchants(storedsBoxedLike(altar, prefEnch(""), "value_int", true)),
-        barrel_size = storedInt(altar, prefOg("barrel_size")),
-        num_cells_sucked_per_frame = storedInt(altar, prefOg("num_cells_sucked_per_frame")),
-        spray_velocity_coeff = storedFloat(altar, prefOg("spray_velocity_coeff")),
-        spray_velocity_normalized_min = storedFloat(altar, prefOg("spray_velocity_normalized_min")),
-        throw_how_many = storedInt(altar, prefOg("throw_how_many"))
-    }
+---Return the holders flask stats of the altar provided, which are stored in Vscs
+---@param altar entity_id The altar returning holders of the flask stats VSCs
+---@return FlaskStats[]
+function holderFlaskStats(altar)
+    local holders = EntityGetAllChildren(altar) or {}
+    local result = {} ---@type FlaskStats[]
+    for _, holder in ipairs(holders) do
+        result[#result + 1] = {
+            materials = materializeMaterials(storedsBoxedLike(holder, prefMat(""), "value_int", true)),
+            enchantments = materializeEnchants(storedsBoxedLike(holder, prefEnch(""), "value_int", true)),
+            barrel_size = { storedInt(holder, prefOg("barrel_size")) },
+            num_cells_sucked_per_frame = { storedInt(holder, prefOg("num_cells_sucked_per_frame")) },
+            spray_velocity_coeff = { storedFloat(holder, prefOg("spray_velocity_coeff")) },
+            spray_velocity_normalized_min = { storedFloat(holder, prefOg("spray_velocity_normalized_min")) },
+            throw_how_many = { storedInt(holder, prefOg("throw_how_many")) }
+        } ---@type FlaskStats
+    end
+    return result
 end
 
-function storeFlaskStats(altar, eid, holder)
-    clearOriginalStats(altar)
-    local function pushMat(matId, amount) if amount > 0 then storeInt(altar, prefMat(matId), amount) end end
-    local materials = flaskMaterials(eid)
-    if type(materials) == "table" then
-        for matId, amount in pairs(materials) do pushMat(matId, amount) end
+---Scrape the material inventory of an entity and return its materials as a Materials table
+---@param flask entity_id
+---@return table<integer, integer>
+function flaskMaterials(flask)
+    if isFlask(flask) then
+        local comp = firstComponent(flask, MIC)
+        return cGet(comp, "count_per_material_type") ---@type table<integer, integer>
     end
+    return {} ---@type table<integer, integer>
+end
+
+---Store the flask stats of the entity onto the holder as Vscs
+---If the holder is a flask enchanter and not a flask, it behaves differently
+---@param eid entity_id
+---@param holder entity_id
+function storeFlaskStats(eid, holder)
     local function pushEnch(key, level)
-        if level ~= 0 then
-            debugOut(" enchant " .. key .. " is level " .. level .. " so we are storing the int!")
-            storeInt(altar, prefEnch(key), level)
+        if level ~= 0 then storeInt(holder, prefEnch(key), level) end
+    end
+    if isFlask(eid) then
+        local function pushMat(matId, amount) if amount > 0 then storeInt(holder, prefMat(matId), amount) end end
+        for matId, amount in pairs(flaskMaterials(eid)) do pushMat(matId, amount) end
+        for key, _ in pairs(flaskEnchantDefs) do pushEnch(key, enchantLevel(eid, key)) end
+        local msc = firstComponent(eid, MSC)
+        storeInt(holder, prefOg("num_cells_sucked_per_frame"), cGet(msc, "num_cells_sucked_per_frame"))
+        storeInt(holder, prefOg("barrel_size"), cGet(msc, "barrel_size"))
+        local potion = firstComponent(eid, "PotionComponent")
+        storeFloat(holder, prefOg("spray_velocity_coeff"), cGet(potion, "spray_velocity_coeff"))
+        storeFloat(holder, prefOg("spray_velocity_normalized_min"), cGet(potion, "spray_velocity_normalized_min"))
+        storeInt(holder, prefOg("throw_how_many"), cGet(potion, "throw_how_many"))
+    elseif isFlaskEnhancer(eid) then
+        for _, def in ipairs(flaskEnchantDefs) do
+            local level = 0
+            for _, eval in ipairs(def.evaluators) do
+                level = level + eval(eid)
+            end
+            pushEnch(def.key, level)
         end
     end
-    for key, _ in pairs(enchants) do pushEnch(key, enchantLevel(eid, key)) end
-    local msc = firstComponent(eid, MSC)
-    storeInt(altar, prefOg("num_cells_sucked_per_frame"), cGet(msc, "num_cells_sucked_per_frame"))
-    storeInt(altar, prefOg("barrel_size"), cGet(msc, "barrel_size"))
-    local potion = firstComponent(eid, "PotionComponent")
-    storeFloat(altar, prefOg("spray_velocity_coeff"), cGet(potion, "spray_velocity_coeff"))
-    storeFloat(altar, prefOg("spray_velocity_normalized_min"), cGet(potion, "spray_velocity_normalized_min"))
-    storeInt(altar, prefOg("throw_how_many"), cGet(potion, "throw_how_many"))
 end
 
+---Return the reactivity stats of a flask stat amalgam.
+---@param c FlaskStats
+---@return Reactivity
 function reactivity(c)
-    local level = c.enchantments.reactive or 0
+    local level = 0
+    if c.enchantments["reactive"] then level = level + c.enchantments["reactive"] end
     return {
         chance = 20 + (level * 20),
         speed = math.floor(c.barrel_size ^ reactSpeedExp) * (level + 1)
     }
 end
 
-function mergeFlaskStats(upperAltar, lowerAltar, isRestore)
-    local t = originalFlask(upperAltar)
-    local offered = isRestore and {} --or flaskEnhancers(lowerAltar)
-    for _, offer in ipairs(offered) do
-        if isFlask(offer) then
-            local materials = flaskMaterials(offer)
-            if type(materials) == "table" then
-                local function pushMat(k, v) if v > 0 then increment(t.materials, prefMat(k), v) end end
-                for matId, amount in pairs(materials) do pushMat(matId, amount) end
-                local function pushEnch(k, v) if v ~= 0 then increment(t.enchantments, k, v) end end
-                for k, _ in pairs(enchants) do pushEnch(k, enchantLevel(offer, k)) end
-                local msc = firstComponent(offer, MSC)
-                cSum(t, msc, "barrel_size")
-                cSum(t, msc, "num_cells_sucked_per_frame")
-                local potion = firstComponent(offer, "PotionComponent")
-                cMerge(t, potion, "spray_velocity_coeff", 225, 0.5)
-                cMerge(t, potion, "spray_velocity_normalized_min", 1.5, 0.5)
-                cMerge(t, potion, "throw_how_many", t.barrel_size ^ 0.75, 1)
+---Take the sum of the holder entities components, whatever they may be
+---This can be used to restore the target item to its original values
+---by passing a nil for the lower altar, which causes no lower items to
+---be factored in the formula. The result will be a combined FlaskStats
+---@param upperAltar entity_id
+---@param lowerAltar entity_id|nil
+---@return FlaskStats|nil
+function mergeFlaskStats(upperAltar, lowerAltar)
+    local upperFlaskStats = holderFlaskStats(upperAltar)
+    if #upperFlaskStats == 0 then return nil end
+    if not lowerAltar then return upperFlaskStats[1] end
+
+    local offerings = holderFlaskStats(lowerAltar)
+    injectFlaskStatsIntoFlaskStats(upperFlaskStats[1], offerings)
+
+    local blended = blendFlaskStats(upperFlaskStats[1])
+
+    --thonk.about("blended wand result", blended)
+    return blended
+end
+
+---Scrape the stats out of a flask or holder's stat blocks
+---@param flaskStats FlaskStats an existing flaskStats
+---@param allOfferingsStats FlaskStats[] All flask stats as an array of stats holders.
+---@return FlaskStats
+function injectFlaskStatsIntoFlaskStats(flaskStats, allOfferingsStats)
+    for _, offeringStats in ipairs(allOfferingsStats) do
+        for k, statPool in pairs(offeringStats) do
+            for _, value in ipairs(statPool) do
+                table.insert(flaskStats[k], value)
             end
+        end
+    end
+    return flaskStats
+end
+
+---Returns an empty flask stat table to work on
+---@return FlaskStats
+function newFlaskStats()
+    return {
+        enchantments = {},
+        barrel_size = {},
+        num_cells_sucked_per_frame = {},
+        spray_velocity_coeff = {},
+        spray_velocity_normalized_min = {},
+        throw_how_many = {},
+        materials = {}
+    } ---@type FlaskStats
+end
+
+---Take a single flask stat assemblage and blend the arrays into a flattened FlaskStat with only
+---one value per array (or enchants and materials condensed to flat maps, obviously they're still tables)
+---@param flaskStats FlaskStats|nil
+---@return FlaskStats|nil
+function blendFlaskStats(flaskStats)
+    if not flaskStats then return nil end
+    local result = newFlaskStats()
+    for _, def in ipairs(flaskStatDefs) do
+        local pool = flaskStats[def.key]
+        if def.formula == "group_sum" then
+            local t = {}
+            for k, v in pairs(pool) do
+                if v ~= 0 then
+                    if t[k] then
+                        t[k] = t[k] + v
+                    else
+                        t[k] = v
+                    end
+                end
+            end
+            table.insert(result[def.key], t)
         else
-            local function pushEnch(k, v) increment(t.enchantments, k, v) end
-            for k, def in pairs(enchants) do pushEnch(k, def.value(offer)) end
+            -- thonk.about("pool of stats", pool, "merge strategy", def.formula)
+            while #pool > 1 do
+                local a = table.remove(pool, 1)
+                local b = table.remove(pool, 1)
+                if def.formula == "sum" then
+                    table.insert(result[def.key], a + b)
+                elseif def.formula == "clamp_blend" then
+                    local scale = 0.5
+                    local limit = def.key == "spray_velocity_coeff" and 225 or 1.5
+                    local aMerge = asymmetricMerge(scale, limit, a, b)
+                    table.insert(result[def.key], aMerge)
+                end
+            end
         end
     end
 
-    -- clamp lower and upper bounds
-    local function clamp(k, d) t.enchantments[k] = math.min(d.max, math.max(d.min, t.enchantments[k])) end
-    for key, def in pairs(enchants) do if t.enchantments[key] then clamp(key, def) end end
+    -- clamp lower and upper bounds of enchantment def on an enchantment level entry
+    ---@param k string enchantment key from the def
+    ---@param d FlaskEnchantDef
+    local function clamp(k, d) 
+        if #result.enchantments[k] > 0 then
+            result.enchantments[k] = math.min(d.max, math.max(d.min, result.enchantments[k]))
+        end
+    end
+    for _, def in ipairs(flaskEnchantDefs) do if result.enchantments[def.key] then clamp(def.key, def) end end
 
-    return t
+    return result
 end
 
 function setFlaskReactivity(flask, reactivity)
@@ -299,12 +415,12 @@ function setFlaskDamageModelsAndPhysicsBodyDamage(flask, combined)
 end
 
 ---Sets the result of the flask item in scope to the stats provided.
----@param flask integer
+---@param flask entity_id
 ---@param combined FlaskStats|nil
 function setFlaskResult(flask, combined)
     if not combined then return end
     setDescription(flask, describeFlask(combined))
-    for key, level in pairs(combined.enchantments or {}) do enchants[key].apply(flask, level) end
+    for key, level in pairs(combined.enchantments or {}) do flaskEnchantDefs[key].apply(flask, level) end
     local msc = firstComponent(flask, MSC)
     cSet(msc, "barrel_size", combined.barrel_size)
     cSet(msc, "num_cells_sucked_per_frame", combined.num_cells_sucked_per_frame)
