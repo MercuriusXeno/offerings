@@ -1,3 +1,5 @@
+dofile_once("mods/offerings/lib/components.lua")
+dofile_once("mods/offerings/lib/entities.lua")
 local thonk = dofile("mods/offerings/lib/thonk.lua") ---@type Thonk
 
 ---@class WandStats
@@ -159,7 +161,7 @@ function blendWandStats(stats)
                 poolInject(pool, math.max(worst, next_worst))
             end
         end
-        -- thonk.about("stat", def.prop, "final stat value", pool[1])
+        --thonk.about("stat", def.prop, "final stat value", pool[1])
         -- at this point only one result should be in each pool
         table.insert(result[def.prop], pool[1])
     end

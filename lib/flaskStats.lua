@@ -1,6 +1,6 @@
 dofile_once("mods/offerings/lib/components.lua")
 dofile_once("mods/offerings/lib/entities.lua")
-
+local thonk = dofile("mods/offerings/lib/thonk.lua") ---@type Thonk
 
 local enchantPrefix = "offering_flask_enchant_"
 local flask_enchant_loc_prefix = "$" .. enchantPrefix
@@ -10,10 +10,8 @@ local MIC = "MaterialInventoryComponent"
 local MSC = "MaterialSuckerComponent"
 local PBCDC = "PhysicsBodyCollisionDamageComponent"
 
-local locPrefix = "$offerings_"
+local locPrefix = "$offerings_flask_"
 local barrelSizeLoc = locPrefix .. "barrel_size"
---this seems more balanced than taking .5% of the barrel size.
-local reactSpeedExp = (math.log(5) / math.log(1000))
 local originalStats = "original_stats_"
 local function unprefix(s, n) return s:sub(n + 1) end
 
@@ -32,13 +30,13 @@ local function unprefEnch(s) return unprefix(s, ENCH) end
 ---@field formula string
 
 local flaskStatDefs = {
-    { key = "enchantments", formula="group_sum" },
-    { key = "barrel_size", formula="sum" },
-    { key = "num_cells_sucked_per_frame", formula="sum" },
-    { key = "spray_velocity_coeff", formula="clamp_blend" },
-    { key = "spray_velocity_normalized_min", formula="clamp_blend" },
-    { key = "throw_how_many", formula="sum" },
-    { key = "materials", formula="group_sum" }
+    { key = "enchantments",                  formula = "group_sum" },
+    { key = "barrel_size",                   formula = "sum" },
+    { key = "num_cells_sucked_per_frame",    formula = "sum" },
+    { key = "spray_velocity_coeff",          formula = "clamp_blend" },
+    { key = "spray_velocity_normalized_min", formula = "clamp_blend" },
+    { key = "throw_how_many",                formula = "sum" },
+    { key = "materials",                     formula = "group_sum" }
 } ---@type FlaskStatDef
 
 ---@class FlaskStats
@@ -57,7 +55,7 @@ local flaskStatDefs = {
 ---@field min integer
 ---@field max integer
 ---@field apply fun(eid: entity_id, level: integer)
----@field describe fun(stats: FlaskStats, key: string, level: integer)
+---@field describe fun(stats: FlaskStats, key: string, level: integer): string
 
 ---@class FlaskEnchant
 ---@field key string
@@ -141,7 +139,7 @@ end
 
 function makeInstant(eid, _)
     local barrel_size = valueOrDefault(eid, MSC, "barrel_size", 1000)
-    local potionComp = firstComponent(eid, "PotionComponent")
+    local potionComp = firstComponent(eid, "PotionComponent", nil)
     setValue(potionComp, "throw_bunch", true)
     setValue(potionComp, "throw_how_many", barrel_size)
 end
@@ -182,6 +180,9 @@ function reactionSpeed(combined_stats)
     return ""
 end
 
+---Set the description of the flask in the UI so the player knows its stats
+---@param combined FlaskStats
+---@return string
 function describeFlask(combined)
     local result = ""
     for _, def in ipairs(flaskEnchantDefs) do
@@ -190,8 +191,8 @@ function describeFlask(combined)
             result = appendDescription(result, enchDesc)
         end
     end
-    if combined.barrel_size > 1000 then
-        local barrelSizeDesc = GameTextGet(barrelSizeLoc) .. ": " .. combined.barrel_size
+    if combined.barrel_size[1] > 1000 then
+        local barrelSizeDesc = GameTextGet(barrelSizeLoc) .. ": " .. combined.barrel_size[1]
         result = appendDescription(result, barrelSizeDesc)
     end
     return result
@@ -253,7 +254,7 @@ end
 ---@return table<integer, integer>
 function flaskMaterials(flask)
     if isFlask(flask) then
-        local comp = firstComponent(flask, MIC)
+        local comp = firstComponent(flask, MIC, nil)
         return cGet(comp, "count_per_material_type") ---@type table<integer, integer>
     end
     return {} ---@type table<integer, integer>
@@ -262,23 +263,36 @@ end
 ---Store the flask stats of the entity onto the holder as Vscs
 ---If the holder is a flask enchanter and not a flask, it behaves differently
 ---@param eid entity_id
----@param holder entity_id
-function storeFlaskStats(eid, holder)
+---@param hid entity_id
+function storeFlaskStats(eid, hid)
+    if storedInt(hid, "eid") ~= eid then return end
+
     local function pushEnch(key, level)
-        if level ~= 0 then storeInt(holder, prefEnch(key), level) end
+        if level ~= 0 then storeInt(hid, prefEnch(key), level) end
     end
     if isFlask(eid) then
-        local function pushMat(matId, amount) if amount > 0 then storeInt(holder, prefMat(matId), amount) end end
-        for matId, amount in pairs(flaskMaterials(eid)) do pushMat(matId, amount) end
+        -- if the holder has a barrel_size VSC ALSO don't overwrite it.
+        local existing = storedInt(hid, prefOg("barrel_size"))
+        if existing then return end
+
+        local materials = flaskMaterials(eid)
+        local function pushMat(matId, amount) if amount > 0 then storeInt(hid, prefMat(matId), amount) end end
+        for matId, amount in pairs(materials) do pushMat(matId, amount) end
         for key, _ in pairs(flaskEnchantDefs) do pushEnch(key, enchantLevel(eid, key)) end
-        local msc = firstComponent(eid, MSC)
-        storeInt(holder, prefOg("num_cells_sucked_per_frame"), cGet(msc, "num_cells_sucked_per_frame"))
-        storeInt(holder, prefOg("barrel_size"), cGet(msc, "barrel_size"))
-        local potion = firstComponent(eid, "PotionComponent")
-        storeFloat(holder, prefOg("spray_velocity_coeff"), cGet(potion, "spray_velocity_coeff"))
-        storeFloat(holder, prefOg("spray_velocity_normalized_min"), cGet(potion, "spray_velocity_normalized_min"))
-        storeInt(holder, prefOg("throw_how_many"), cGet(potion, "throw_how_many"))
+
+        local msc = firstComponent(eid, MSC, nil)
+        storeInt(hid, prefOg("num_cells_sucked_per_frame"), cGet(msc, "num_cells_sucked_per_frame"))
+        storeInt(hid, prefOg("barrel_size"), cGet(msc, "barrel_size"))
+
+        local potion = firstComponent(eid, "PotionComponent", nil)
+        storeFloat(hid, prefOg("spray_velocity_coeff"), cGet(potion, "spray_velocity_coeff"))
+        storeFloat(hid, prefOg("spray_velocity_normalized_min"), cGet(potion, "spray_velocity_normalized_min"))
+        storeInt(hid, prefOg("throw_how_many"), cGet(potion, "throw_how_many"))
     elseif isFlaskEnhancer(eid) then
+        local existing = storedsLike(hid, prefEnch(""), "value_int", true)
+        if #existing > 0 then return end
+
+        -- if the holder already has enchantment VSCs ALSO don't overwrite it
         for _, def in ipairs(flaskEnchantDefs) do
             local level = 0
             for _, eval in ipairs(def.evaluators) do
@@ -297,7 +311,9 @@ function reactivity(c)
     if c.enchantments["reactive"] then level = level + c.enchantments["reactive"] end
     return {
         chance = 20 + (level * 20),
-        speed = math.floor(c.barrel_size ^ reactSpeedExp) * (level + 1)
+        --- vanilla flasks with 1000 max have a 5 speed (1/200th of size)
+        --- this keeps that proportion, possibly imbalanced?
+        speed = math.floor(c.barrel_size[1] / 200) * (level + 1)
     }
 end
 
@@ -315,10 +331,11 @@ function mergeFlaskStats(upperAltar, lowerAltar)
 
     local offerings = holderFlaskStats(lowerAltar)
     injectFlaskStatsIntoFlaskStats(upperFlaskStats[1], offerings)
+    --thonk.about("results before blend", upperFlaskStats[1], "offerings before blend", offerings)
 
     local blended = blendFlaskStats(upperFlaskStats[1])
 
-    --thonk.about("blended wand result", blended)
+    --thonk.about("blended flask result", blended)
     return blended
 end
 
@@ -328,9 +345,22 @@ end
 ---@return FlaskStats
 function injectFlaskStatsIntoFlaskStats(flaskStats, allOfferingsStats)
     for _, offeringStats in ipairs(allOfferingsStats) do
-        for k, statPool in pairs(offeringStats) do
-            for _, value in ipairs(statPool) do
-                table.insert(flaskStats[k], value)
+        for _, def in ipairs(flaskStatDefs) do
+            local statPool = offeringStats[def.key]
+            if def.formula == "group_sum" then
+                for k, v in pairs(statPool) do
+                    if v ~= 0 then
+                        if flaskStats[def.key][k] then
+                            flaskStats[def.key][k] = flaskStats[def.key][k] + v
+                        else
+                            flaskStats[def.key][k] = v
+                        end
+                    end
+                end
+            else
+                for _, value in ipairs(statPool) do
+                    table.insert(flaskStats[def.key], value)
+                end
             end
         end
     end
@@ -360,50 +390,50 @@ function blendFlaskStats(flaskStats)
     local result = newFlaskStats()
     for _, def in ipairs(flaskStatDefs) do
         local pool = flaskStats[def.key]
+        -- thonk.about(def.key .. " pool of stats blending", pool)
         if def.formula == "group_sum" then
-            local t = {}
             for k, v in pairs(pool) do
                 if v ~= 0 then
-                    if t[k] then
-                        t[k] = t[k] + v
+                    if result[def.key][k] then
+                        result[def.key][k] = result[def.key][k] + v
                     else
-                        t[k] = v
+                        result[def.key][k] = v
                     end
                 end
             end
-            table.insert(result[def.key], t)
         else
             -- thonk.about("pool of stats", pool, "merge strategy", def.formula)
             while #pool > 1 do
                 local a = table.remove(pool, 1)
                 local b = table.remove(pool, 1)
                 if def.formula == "sum" then
-                    table.insert(result[def.key], a + b)
+                    table.insert(pool, 1, a + b)
                 elseif def.formula == "clamp_blend" then
                     local scale = 0.5
                     local limit = def.key == "spray_velocity_coeff" and 225 or 1.5
                     local aMerge = asymmetricMerge(scale, limit, a, b)
-                    table.insert(result[def.key], aMerge)
+                    table.insert(pool, 1, aMerge)
                 end
             end
+            table.insert(result[def.key], pool[1])
         end
     end
 
     -- clamp lower and upper bounds of enchantment def on an enchantment level entry
     ---@param k string enchantment key from the def
     ---@param d FlaskEnchantDef
-    local function clamp(k, d) 
-        if #result.enchantments[k] > 0 then
+    local function clamp(k, d)
+        if #result.enchantments[k] ~= 0 then
             result.enchantments[k] = math.min(d.max, math.max(d.min, result.enchantments[k]))
         end
     end
     for _, def in ipairs(flaskEnchantDefs) do if result.enchantments[def.key] then clamp(def.key, def) end end
-
+    --thonk.about("flask combo results", result)
     return result
 end
 
 function setFlaskReactivity(flask, reactivity)
-    local comp = firstComponent(flask, MIC)
+    local comp = firstComponent(flask, MIC, nil)
     cSet(comp, "do_reactions", reactivity.chance)
     cSet(comp, "reaction_speed", reactivity.speed)
 end
@@ -421,16 +451,16 @@ function setFlaskResult(flask, combined)
     if not combined then return end
     setDescription(flask, describeFlask(combined))
     for key, level in pairs(combined.enchantments or {}) do flaskEnchantDefs[key].apply(flask, level) end
-    local msc = firstComponent(flask, MSC)
-    cSet(msc, "barrel_size", combined.barrel_size)
-    cSet(msc, "num_cells_sucked_per_frame", combined.num_cells_sucked_per_frame)
+    local msc = firstComponent(flask, MSC, nil)
+    cSet(msc, "barrel_size", combined.barrel_size[1])
+    cSet(msc, "num_cells_sucked_per_frame", combined.num_cells_sucked_per_frame[1])
 
-    local potion = firstComponent(flask, "PotionComponent")
-    cSet(potion, "spray_velocity_coeff", combined.spray_velocity_coeff)
-    cSet(potion, "spray_velocity_normalized_min", combined.spray_velocity_normalized_min)
-    cSet(potion, "throw_how_many", combined.throw_how_many)
+    local potion = firstComponent(flask, "PotionComponent", nil)
+    cSet(potion, "spray_velocity_coeff", combined.spray_velocity_coeff[1])
+    cSet(potion, "spray_velocity_normalized_min", combined.spray_velocity_normalized_min[1])
+    cSet(potion, "throw_how_many", combined.throw_how_many[1])
     cSet(potion, "dont_spray_just_leak_gas_materials", false)
-    if combined.barrel_size > 10000 then cSet(potion, "throw_bunch", true) end
+    if combined.barrel_size[1] > 10000 then cSet(potion, "throw_bunch", true) end
     local reactivity = reactivity(combined)
     setFlaskReactivity(flask, reactivity)
     setFlaskDamageModelsAndPhysicsBodyDamage(flask, combined)
