@@ -9,8 +9,10 @@ local VSC = "VariableStorageComponent"
 local MIC = "MaterialInventoryComponent"
 local MSC = "MaterialSuckerComponent"
 local PBCDC = "PhysicsBodyCollisionDamageComponent"
+local DMC = "DamageModelComponent"
+local PISC = "PhysicsImageShapeComponent"
 
-local locPrefix = "$offerings_flask_"
+local locPrefix = "$offering_flask_"
 local barrelSizeLoc = locPrefix .. "barrel_size"
 local originalStats = "original_stats_"
 local function unprefix(s, n) return s:sub(n + 1) end
@@ -57,50 +59,16 @@ local flaskStatDefs = {
 ---@field apply fun(eid: entity_id, level: integer)
 ---@field describe fun(stats: FlaskStats, key: string, level: integer): string
 
----@class FlaskEnchant
----@field key string
----@field level integer
-
----@class Reactivity
----@field chance integer
----@field speed integer
-
-local flaskEnchantDefs = {} ---@type FlaskEnchantDef[]
-
----Registers a flask enchantment definition to the array. Can be called externally
-function registerFlaskEnchantment(key, evaluators, min, max, apply, describe)
-    local def = {
-        key = key,
-        evaluators = evaluators,
-        min = min,
-        max = max,
-        apply = apply,
-        describe = describe
-    } ---@type FlaskEnchantDef
-    flaskEnchantDefs[#flaskEnchantDefs + 1] = def
-end
-
-registerFlaskEnchantment("tempered", { brimstoneValue }, 0, 1, removeDamageModels, describeTempered)
-registerFlaskEnchantment("instant", { thunderstoneValue }, 0, 1, makeInstant, describeInstant)
-registerFlaskEnchantment("reactive", { scrollValue, tabletValue }, -1, 5, makeReactive, describeReactive)
-registerFlaskEnchantment("draining", { ldcValue }, 0, 1, makeDraining, describeDraining)
-registerFlaskEnchantment("transmuting", { potionMimicValue }, 0, 1, makeTransmuting, describeTransmuting)
-
 function isFlask(eid) return EntityHasTag(eid, "potion") or itemNamed(eid, "$item_cocktail") end
 
-function isFlaskEnhancer(eid) return isFlask(eid) or hasAnyEnchantValue(eid) end
-
+---Scrape the level of enchantment an item gives by looping over a def's evaluators
+---@param def FlaskEnchantDef
+---@param eid entity_id
+---@return integer
 function itemEnchantmentValue(def, eid)
     local r = 0
     for _, f in ipairs(def.evaluators) do r = r + f(eid) end
     return r
-end
-
-function hasAnyEnchantValue(eid)
-    for _, enchant in pairs(flaskEnchantDefs) do
-        if itemEnchantmentValue(enchant, eid) ~= 0 then return true end
-    end
-    return false
 end
 
 function tabletValue(eid)
@@ -123,37 +91,117 @@ function thunderstoneValue(eid) return EntityHasTag(eid, "thunderstone") and 1 o
 
 function potionMimicValue(eid) return itemNamed(eid, "$item_potion_mimic") and 1 or 0 end
 
-function ldcValue(eid) return EntityHasTag(eid, "waterstone") and 1 or 0 end
+function ldcValue(eid)
+    local itemActionComp = firstComponent(eid, "ItemActionComponent", nil)
+    if not itemActionComp then return 0 end
+    local actionId = cGet(itemActionComp, "action_id")
+    return actionId == "LONG_DISTANCE_CAST" and 1 or 0
+end
 
-function removeDamageModels(eid) removeAll(eid, "DamageModelComponent") end
+function storeEnchantKey(eid, key, level)
+    local fullkey = enchantPrefix .. key
+    removeMatch(eid, VSC, nil, "name", fullkey)
+    storeInt(eid, fullkey, level)
+end
+
+local defaultPotionDmc = {
+    air_needed = false,
+    blood_material = "",
+    drop_items_on_death = false,
+    falling_damages = false,
+    fire_damage_amount = 0.2,
+    fire_probability_of_ignition = 0,
+    critical_damage_resistance = 1.0,
+    hp = 0.5,
+    is_on_fire = false,
+    materials_create_messages = false,
+    materials_damage = true,
+    materials_that_damage = "lava",
+    materials_how_much_damage = 0.001,
+    ragdoll_filenames_file = "",
+    ragdoll_material = ""
+}
+
+function makeTempered(eid, level)
+    storeEnchantKey(eid, "tempered", level)
+    --thonk.about("tempered-ing", eid, "level", level)
+    local pbcdc = firstComponent(eid, PBCDC, nil)
+    cSet(pbcdc, "damage_multiplier", (1 - level) * 0.016667)
+    if level == 0 then
+        EntityAddComponent2(eid, DMC, defaultPotionDmc)
+    else
+        removeAll(eid, DMC, nil)
+    end
+
+    local dc = firstComponent(eid, DMC, nil)
+    toggleComp(eid, dc, level == 0)
+
+    local pisc = firstComponent(eid, PISC, nil)
+    --local normieGlass = CellFactory_GetType("glass")
+    local temperedGlass = CellFactory_GetType("offering_tempered_glass_box2d")
+    --thonk.about("tempered glass material", temperedGlass, "normie glass", normieGlass)
+    cSet(pisc, "material", temperedGlass)
+end
 
 function makeReactive(eid, level)
-    eachComponentSet(eid, MIC, nil, "reaction_rate", math.max(0, math.min(20 + (level * 20), 100)))
+    storeEnchantKey(eid, "reactive", level)
+    --thonk.about("reactive-ing", eid, "level", level)
+    local suckComp = firstComponent(eid, MSC, nil)
+    local barrel = cGet(suckComp, "barrel_size")
+    local comp = firstComponent(eid, MIC, nil)
+    cSet(comp, "do_reactions", 20 + (level * 20))
+    cSet(comp, "reaction_speed", math.floor(barrel / 200) * (level + 1))
 end
 
 function makeTransmuting(eid, level)
-    local key = enchantPrefix .. "transmuting"
-    removeMatch(eid, VSC, nil, "name", key)
-    storeInt(eid, key, level)
+    storeEnchantKey(eid, "transmuting", level)
+    --thonk.about("transmuting-ing", eid, "level", level)
+    -- TODO
 end
 
-function makeInstant(eid, _)
+function makeInstant(eid, level)
+    storeEnchantKey(eid, "instant", level)
+    --thonk.about("instant-ing", eid, "level", level)
     local barrel_size = valueOrDefault(eid, MSC, "barrel_size", 1000)
     local potionComp = firstComponent(eid, "PotionComponent", nil)
-    setValue(potionComp, "throw_bunch", true)
-    setValue(potionComp, "throw_how_many", barrel_size)
+    cSet(potionComp, "throw_bunch", level == 1)
+    cSet(potionComp, "throw_how_many", barrel_size)
 end
 
+local drainingScript = {
+    script_source_file = "mods/offerings/entity/draining.lua",
+    execute_every_n_frame = 1
+}
+local drainXml = "mods/offerings/entity/draining.xml"
 function makeDraining(eid, level)
-    local key = enchantPrefix .. "draining"
-    removeMatch(eid, VSC, nil, "name", key)
-    storeInt(eid, key, level) -- temporary draining flag
+    storeEnchantKey(eid, "draining", level)
+    --thonk.about("draining-ing", eid, "level", level)
+
+    --draining is kind of a hack. The moment a draining entity exists they
+    --are with you forever, but only "functional" when holding a draining flask.
+    -- it just kinda follows you everywhere. There can only be one.
+    if level > 0 then
+        local mouseX, mouseY = DEBUG_GetMouseWorld()
+        local entitiesNearMouse = EntityGetInRadius(mouseX, mouseY, 100)
+        local existingDrain = nil
+        for _, e in ipairs(entitiesNearMouse) do
+            if EntityGetFilename(e) == drainXml then existingDrain = e end
+        end
+        if not existingDrain then
+            EntityLoad(drainXml, mouseX, mouseY)
+        end
+    end
 end
 
 function locKey(s) return flask_enchant_loc_prefix .. s end
 
 function loc(s) return GameTextGet(locKey(s)) end
 
+---Default description placeholder. Puts the loc key in the ui description.
+---@param combined FlaskStats
+---@param enchKey string
+---@param level integer
+---@return string
 function defaultEnchantLoc(combined, enchKey, level) return locKey(enchKey) end
 
 describeTempered = defaultEnchantLoc
@@ -164,20 +212,89 @@ describeInstant = defaultEnchantLoc
 
 describeTransmuting = defaultEnchantLoc
 
-function describeReactive(combined, key, level)
-    return loc(key) .. " " .. level
-        .. " " .. loc("reaction_chance") .. ": " .. reactionChance(combined)
-        .. " " .. loc("reaction_speed") .. ": " .. reactionSpeed(combined)
+---Default description placeholder. Puts the loc key in the ui description.
+---@param combined FlaskStats
+---@param enchKey string
+---@param level integer
+---@return string
+function describeReactive(combined, enchKey, level)
+    if level < 0 then return loc("inert") end
+    return loc(enchKey) .. " " .. level
+        .. " " .. loc("reaction_chance") .. ": " .. reactionChance(level) .. "%"
+        .. " " .. loc("reaction_speed") .. ": " .. reactionSpeed(combined, level)
 end
 
-function reactionChance(combined_stats)
-    -- STUB
-    return ""
+function reactionChance(level)
+    return tostring(20 + (level * 20))
 end
 
-function reactionSpeed(combined_stats)
-    -- STUB
-    return ""
+---The reaction speed of a flask, in the description
+---@param combined FlaskStats
+---@param level integer
+---@return string
+function reactionSpeed(combined, level)
+    local barrel = combined.barrel_size[1]
+    return tostring(math.floor(barrel / 200) * (level + 1))
+end
+
+local flaskEnchantDefs = {
+    {
+        key = "tempered",
+        evaluators = { brimstoneValue },
+        min = 0,
+        max = 1,
+        apply = makeTempered,
+        describe = describeTempered
+    },
+    {
+        key = "instant",
+        evaluators = { thunderstoneValue },
+        min = 0,
+        max = 1,
+        apply = makeInstant,
+        describe = describeInstant
+    },
+    {
+        key = "reactive",
+        evaluators = { scrollValue, tabletValue },
+        min = -1,
+        max = 4,
+        apply = makeReactive,
+        describe = describeReactive
+    },
+    {
+        key = "draining",
+        evaluators = { ldcValue },
+        min = 0,
+        max = 1,
+        apply = makeDraining,
+        describe = describeDraining
+    },
+    {
+        key = "transmuting",
+        evaluators = { potionMimicValue },
+        min = 0,
+        max = 1,
+        apply = makeTransmuting,
+        describe = describeTransmuting
+    }
+}
+
+function isFlaskEnhancer(eid) return isFlask(eid) or hasAnyEnchantValue(eid) end
+
+---Return whether the item has an enchantment value of any kind
+---@param eid entity_id
+---@return boolean
+function hasAnyEnchantValue(eid)
+    --thonk.about("enchantment defs", flaskEnchantDefs)
+    for _, enchant in ipairs(flaskEnchantDefs) do
+        --thonk.about("def evaluators", #enchant.evaluators)
+        if itemEnchantmentValue(enchant, eid) ~= 0 then
+            --thonk.about("enchant", enchant, "value detected on", eid)
+            return true
+        end
+    end
+    return false
 end
 
 ---Set the description of the flask in the UI so the player knows its stats
@@ -191,6 +308,7 @@ function describeFlask(combined)
             result = appendDescription(result, enchDesc)
         end
     end
+    --thonk.about("describing flask, combined stats", combined)
     if combined.barrel_size[1] > 1000 then
         local barrelSizeDesc = GameTextGet(barrelSizeLoc) .. ": " .. combined.barrel_size[1]
         result = appendDescription(result, barrelSizeDesc)
@@ -271,6 +389,7 @@ function storeFlaskStats(eid, hid)
         if level ~= 0 then storeInt(hid, prefEnch(key), level) end
     end
     if isFlask(eid) then
+        --thonk.about("adding flask to offerings")
         -- if the holder has a barrel_size VSC ALSO don't overwrite it.
         local existing = storedInt(hid, prefOg("barrel_size"))
         if existing then return end
@@ -278,7 +397,7 @@ function storeFlaskStats(eid, hid)
         local materials = flaskMaterials(eid)
         local function pushMat(matId, amount) if amount > 0 then storeInt(hid, prefMat(matId), amount) end end
         for matId, amount in pairs(materials) do pushMat(matId, amount) end
-        for key, _ in pairs(flaskEnchantDefs) do pushEnch(key, enchantLevel(eid, key)) end
+        for _, def in ipairs(flaskEnchantDefs) do pushEnch(def.key, enchantLevel(eid, def.key)) end
 
         local msc = firstComponent(eid, MSC, nil)
         storeInt(hid, prefOg("num_cells_sucked_per_frame"), cGet(msc, "num_cells_sucked_per_frame"))
@@ -290,6 +409,7 @@ function storeFlaskStats(eid, hid)
         storeInt(hid, prefOg("throw_how_many"), cGet(potion, "throw_how_many"))
     elseif isFlaskEnhancer(eid) then
         local existing = storedsLike(hid, prefEnch(""), "value_int", true)
+        --thonk.about("adding enchantment to offerings", eid, "existing enchants", existing)
         if #existing > 0 then return end
 
         -- if the holder already has enchantment VSCs ALSO don't overwrite it
@@ -298,23 +418,10 @@ function storeFlaskStats(eid, hid)
             for _, eval in ipairs(def.evaluators) do
                 level = level + eval(eid)
             end
+            --thonk.about("def", def, "level", level)
             pushEnch(def.key, level)
         end
     end
-end
-
----Return the reactivity stats of a flask stat amalgam.
----@param c FlaskStats
----@return Reactivity
-function reactivity(c)
-    local level = 0
-    if c.enchantments["reactive"] then level = level + c.enchantments["reactive"] end
-    return {
-        chance = 20 + (level * 20),
-        --- vanilla flasks with 1000 max have a 5 speed (1/200th of size)
-        --- this keeps that proportion, possibly imbalanced?
-        speed = math.floor(c.barrel_size[1] / 200) * (level + 1)
-    }
 end
 
 ---Take the sum of the holder entities components, whatever they may be
@@ -390,7 +497,7 @@ function blendFlaskStats(flaskStats)
     local result = newFlaskStats()
     for _, def in ipairs(flaskStatDefs) do
         local pool = flaskStats[def.key]
-        -- thonk.about(def.key .. " pool of stats blending", pool)
+        --thonk.about(def.key .. " pool of stats blending", pool)
         if def.formula == "group_sum" then
             for k, v in pairs(pool) do
                 if v ~= 0 then
@@ -402,7 +509,7 @@ function blendFlaskStats(flaskStats)
                 end
             end
         else
-            -- thonk.about("pool of stats", pool, "merge strategy", def.formula)
+            --thonk.about("pool of stats", pool, "merge strategy", def.formula)
             while #pool > 1 do
                 local a = table.remove(pool, 1)
                 local b = table.remove(pool, 1)
@@ -423,7 +530,7 @@ function blendFlaskStats(flaskStats)
     ---@param k string enchantment key from the def
     ---@param d FlaskEnchantDef
     local function clamp(k, d)
-        if #result.enchantments[k] ~= 0 then
+        if result.enchantments[k] then
             result.enchantments[k] = math.min(d.max, math.max(d.min, result.enchantments[k]))
         end
     end
@@ -432,25 +539,14 @@ function blendFlaskStats(flaskStats)
     return result
 end
 
-function setFlaskReactivity(flask, reactivity)
-    local comp = firstComponent(flask, MIC, nil)
-    cSet(comp, "do_reactions", reactivity.chance)
-    cSet(comp, "reaction_speed", reactivity.speed)
-end
-
-function setFlaskDamageModelsAndPhysicsBodyDamage(flask, combined)
-    local tempered = combined.enchantments.tempered or 0
-    eachComponentSet(flask, PBCDC, nil, "damage_multiplier", (1 - tempered) * 0.016667)
-    toggleComps(flask, "DamageModelComponent", nil, tempered == 0)
-end
-
 ---Sets the result of the flask item in scope to the stats provided.
 ---@param flask entity_id
 ---@param combined FlaskStats|nil
 function setFlaskResult(flask, combined)
+    --thonk.about("setting flask results", flask, "results", combined)
     if not combined then return end
     setDescription(flask, describeFlask(combined))
-    for key, level in pairs(combined.enchantments or {}) do flaskEnchantDefs[key].apply(flask, level) end
+
     local msc = firstComponent(flask, MSC, nil)
     cSet(msc, "barrel_size", combined.barrel_size[1])
     cSet(msc, "num_cells_sucked_per_frame", combined.num_cells_sucked_per_frame[1])
@@ -461,9 +557,12 @@ function setFlaskResult(flask, combined)
     cSet(potion, "throw_how_many", combined.throw_how_many[1])
     cSet(potion, "dont_spray_just_leak_gas_materials", false)
     if combined.barrel_size[1] > 10000 then cSet(potion, "throw_bunch", true) end
-    local reactivity = reactivity(combined)
-    setFlaskReactivity(flask, reactivity)
-    setFlaskDamageModelsAndPhysicsBodyDamage(flask, combined)
+
+    for _, def in ipairs(flaskEnchantDefs) do
+        local level = combined.enchantments[def.key] or 0
+        def.apply(flask, level)
+    end
+
     -- build the material component by first clearing it
     RemoveMaterialInventoryMaterial(flask)
     local function push(k, v) AddMaterialInventoryMaterial(flask, CellFactory_GetName(k), v) end

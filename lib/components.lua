@@ -177,10 +177,9 @@ end
 ---@return nil|table|any result the field result, can be a variety of things
 function cGet(comp, field)
   if not comp then return nil end
-  -- pack multi-returns into an array for easier closures
-  local n, vals = capture(ComponentGetValue2, comp, field)
-  if n == 1 then return vals[1] end
-  return vals
+  local v = {ComponentGetValue2(comp, field)}
+  if #v == 1 then return v[1] end
+  return v
 end
 
 function cSet(comp, field, ...)
@@ -205,13 +204,9 @@ function cLike(comp, field, value)
   return cGet(comp, field):find(value)
 end
 
-function setValue(comp, field, ...)
-  if comp then ComponentSetValue2(comp, field, ...) end
-end
-
 function eachComponentSet(eid, ctype, tag, field, ...)
   local comps = componentsOfType(eid, ctype, tag)
-  for _, comp in ipairs(comps) do setValue(comp, field, ...) end
+  for _, comp in ipairs(comps) do cSet(comp, field, ...) end
 end
 
 function store(eid, name, ...)

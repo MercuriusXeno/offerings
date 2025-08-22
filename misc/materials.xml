@@ -1,0 +1,32 @@
+<Materials>
+    <CellData
+        _parent="potion_glass_box2d"
+        name="offering_tempered_glass_box2d"
+        ui_name="$offering_tempered_glass_box2d"
+        tags="[box2d],[indestructible]"
+        platform_type="0"
+        solid_gravity_scale="1.3"
+        burnable="0"
+        durability="14"
+        density="14"
+        generates_smoke="0"
+        on_fire="0"
+        requires_oxygen="0"
+        temperature_of_fire="100"
+        solid_on_break_explode="0"
+        solid_break_to_type="glass_broken"
+        crackability="0"
+        hp="500000"
+	    stainable="0" 
+        audio_physics_material_wall="glass"
+        audio_physics_material_solid="glass"
+        wang_color="f2228827"
+    >
+  	<Graphics
+	normal_mapped="1"
+	texture_file="data/materials_gfx/crystal.png"
+	color="ff5787E7" >
+    </Graphics>
+
+    </CellData>
+</Materials>

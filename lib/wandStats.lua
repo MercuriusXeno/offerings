@@ -100,7 +100,7 @@ end
 ---@param allOfferingsStats WandStats[] All wands stats as an array of stats holders.
 ---@return WandStats
 function injectWandStatsIntoWandStats(wandStats, allOfferingsStats)
-    -- thonk.about("left wand", wandStats, "right wand(s)", allOfferingsStats)
+    --thonk.about("left wand", wandStats, "right wand(s)", allOfferingsStats)
     for _, def in ipairs(wandStatDefs) do
         for i, offeringStats in ipairs(allOfferingsStats) do
             local statPool = offeringStats[def.prop]
@@ -149,7 +149,7 @@ function blendWandStats(stats)
         -- really only necessary for asymmetric merging, but the impact is low
         -- as long as this isn't called excessively.
         table.sort(pool)
-        -- thonk.about("pool of stats", pool, "merge strategy", def.formula)
+        --thonk.about("pool of stats", pool, "merge strategy", def.formula)
         while #pool > 1 do
             local worst = table.remove(pool, 1)
             local next_worst = table.remove(pool, 1)

@@ -1,8 +1,16 @@
 dofile_once("data/scripts/lib/utilities.lua")
+local thonk = dofile_once("mods/offerings/lib/thonk.lua") ---@type Thonk
+
+ModMaterialsFileAdd("mods/offerings/misc/materials.xml")
+
 dofile_once("mods/offerings/translation/append.lua")
 dofile_once("mods/offerings/biome/append.lua")
 dofile_once("mods/offerings/biome/splice.lua")
-
+function OnPlayerSpawned( player_entity ) -- This runs when player entity has been created
+	--local potionGlass = 258
+	--local mat = CellFactory_GetName(potionGlass)
+	--thonk.about("whatever 258 is", mat)
+end
 --[[
 function OnModPreInit()
 	print("Mod - OnModPreInit()") -- First this is called for all mods
@@ -20,9 +28,7 @@ function OnWorldInitialized()
 	print("Mod - OnWorldInit()") -- when the world is first loaded
 end
 
-function OnPlayerSpawned( player_entity ) -- This runs when player entity has been created
-	GamePrint( "OnPlayerSpawned() - Player entity id: " .. tostring(player_entity) )
-end
+
 
 function OnWorldPreUpdate() -- This is called every time the game is about to start updating the world
 	GamePrint( "Pre-update hook " .. tostring(GameGetFrameNum()) )

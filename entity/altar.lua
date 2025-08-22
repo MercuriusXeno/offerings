@@ -1,8 +1,8 @@
-dofile_once("mods/offerings/lib/altarLogic.lua")
+local altar = dofile_once("mods/offerings/lib/altarLogic.lua") ---@type offering_altar
 
 -- STUFF WE DO EVERY EXECUTION
 local thisAltar = GetUpdatedEntityID()
-scanForLinkableItems(thisAltar, true, targetLinkFunc, targetSever)
-local offeringAltarOfThisAltar = lowerAltarNear(thisAltar)
-scanForLinkableItems(offeringAltarOfThisAltar, false, offerLinkFunc, offerSever)
+altar.scanForLinkableItems(thisAltar, true, altar.targetLinkFunc, altar.targetSever)
+local offeringAltarOfThisAltar = altar.lowerAltarNear(thisAltar)
+altar.scanForLinkableItems(offeringAltarOfThisAltar, false, altar.offerLinkFunc, altar.offerSever)
 -- ... THAT'S ALL lol

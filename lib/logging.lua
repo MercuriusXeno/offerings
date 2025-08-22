@@ -1,13 +1,57 @@
 dofile_once("data/scripts/lib/utilities.lua")
+local M = {} ---@class offering_logger
+M.debug_prefix = "-== OFFERINGS_DEBUG ==-   "
+function M.isDebug() return ModSettingGet("offerings.is_debug_mode") == "true" end
 
-local debug_prefix = "-== OFFERINGS_DEBUG ==-   "
-
-function isDebug() return ModSettingGet("offerings.is_debug_mode") == "true" end
-
-function debugOut(s)
-    if isDebug() then return end
+function M.debugOut(s)
+    if M.isDebug() then return end
 
     if string_isempty(s) then return end
-    GamePrint(debug_prefix .. s)
-    print(debug_prefix .. s)
+    GamePrint(M.debug_prefix .. s)
+    print(M.debug_prefix .. s)
 end
+
+---Given an ordered pair list of varargs,
+---print the 1 (name) 2 (value) pair in sequence
+---If the type is a table, recurse into the pairs
+---@param ... any
+function M.about(...)
+    local r = { }
+    M.recursiveAbout(r, 0, ...)
+    for _, s in ipairs(r) do M.debugOut(s) end
+end
+
+---Given a result string[] r and an ordered pair list
+---of varargs inject strings in the array to do a recursive debug out
+---@param r string[]
+---@param ... any
+function M.recursiveAbout(r, d, ...)
+    local i = 1
+    local n = select("#", ...)
+    while i < n do
+        local pad = d > 0 and string.rep("  ", d) or ""
+        local p = select(i, ...)
+        local a = select(i + 1, ...)
+        if type(a) == "table" then
+            r[#r+1] = pad..p
+            local varargs = {}
+            for k, v in pairs(a) do
+                varargs[#varargs+1] = k
+                varargs[#varargs+1] = v
+            end
+            M.recursiveAbout(r, d + 1, unpack(varargs))
+        else
+            local s = type(a) == "string" and a or tostring(a)
+            r[#r+1] = pad .. p .. " " .. s
+        end
+        i = i + 2
+    end
+end
+
+M.stepNumber = 0
+function M.step(s)
+    M.stepNumber = M.stepNumber + 1
+    M.debugOut(M.stepNumber .. " " .. s)
+end
+
+return M

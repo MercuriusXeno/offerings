@@ -17,13 +17,6 @@ end
 
 function each(t, func) for _, v in ipairs(t) do func(v) end end
 
-function pack(...) return { n = select('#', ...), ... } end
-
-function capture(f, ...)
-  local t = pack(f(...))       -- t[1], t[2], ..., t.n is the count
-  return t.n, t
-end
-
 function arrayEquals(a, b)
   if a == b then return true end
   if type(a) ~= "table" or type(b) ~= "table" then return false end
