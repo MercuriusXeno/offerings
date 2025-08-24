@@ -1,5 +1,5 @@
 dofile_once("data/scripts/lib/utilities.lua")
-local thonk = dofile_once("mods/offerings/lib/thonk.lua") ---@type Thonk
+local logger = dofile_once("mods/offerings/lib/log_utils.lua") ---@type offering_logger
 
 ModMaterialsFileAdd("mods/offerings/misc/materials.xml")
 
@@ -9,7 +9,7 @@ dofile_once("mods/offerings/biome/splice.lua")
 function OnPlayerSpawned( player_entity ) -- This runs when player entity has been created
 	--local potionGlass = 258
 	--local mat = CellFactory_GetName(potionGlass)
-	--thonk.about("whatever 258 is", mat)
+	--logger.about("whatever 258 is", mat)
 end
 --[[
 function OnModPreInit()
