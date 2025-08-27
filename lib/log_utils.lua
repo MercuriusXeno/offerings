@@ -6,7 +6,7 @@ function logger.isDebug() return true end
 function logger.debugOut(s)
     if logger.isDebug() then return end
 
-    if string_isempty(s) then return end
+    if s == "" then return end
     GamePrint(logger.debug_prefix .. s)
     print(logger.debug_prefix .. s)
 end

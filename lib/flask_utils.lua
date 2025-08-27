@@ -412,7 +412,7 @@ function M.storeFlaskStats(eid, hid)
         comp_util.storeFloat(hid, prefOg("spray_velocity_normalized_min"), comp_util.cGet(potion, "spray_velocity_normalized_min"))
         comp_util.storeInt(hid, prefOg("throw_how_many"), comp_util.cGet(potion, "throw_how_many"))
     elseif M.isFlaskEnhancer(eid) then
-        local existing = comp_util.storedsLike(hid, prefEnch(""), "value_int", true)
+        local existing = comp_util.storedBoxesLike(hid, prefEnch(""), "value_int", true)
         --logger.about("adding enchantment to offerings", eid, "existing enchants", existing)
         if #existing > 0 then return end
 
@@ -572,3 +572,5 @@ function M.setFlaskResult(flask, combined)
     local function push(k, v) AddMaterialInventoryMaterial(flask, CellFactory_GetName(k), v) end
     for k, v in pairs(combined.materials or {}) do push(k, v) end
 end
+
+return M

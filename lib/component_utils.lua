@@ -1,9 +1,8 @@
 local utils = dofile_once("mods/offerings/lib/utils.lua")
 
---local logger = dofile("mods/offerings/lib/logger.lua") ---@type offering_logger
+--local logger = dofile("mods/offerings/lib/log_utils.lua") ---@type offering_logger
 
 local VSC = "VariableStorageComponent"
-local originalStats = "original_stats_"
 
 ---@class Vsc
 ---@field name? string|nil
@@ -32,6 +31,10 @@ local function componentsWhere(eid, ctype, tag, pred)
   return arr
 end
 
+---Return an object's property in a comp
+---@param comp component_id
+---@param field string the field name
+---@return any
 local function cGet(comp, field)
   if not comp then return nil end
   local v = { ComponentGetValue2(comp, field) }
@@ -43,6 +46,11 @@ local function cSet(comp, field, ...)
   ComponentSetValue2(comp, field, ...)
 end
 
+---Return the object property defined in a comp that is nested in an object
+---@param comp component_id
+---@param obj string the object name
+---@param field string the field name
+---@return any
 local function cObjGet(comp, obj, field)
   return comp and obj and ComponentObjectGetValue2(comp, obj, field)
 end
@@ -185,7 +193,7 @@ local function storedsLike(eid, name, specificField, isSkippingZero)
   return vscs
 end
 
-local function storedsBoxedLike(eid, name, specificField, isSkippingZero)
+local function storedBoxesLike(eid, name, specificField, isSkippingZero)
   local vscs = {}
   local function push(_, comp)
     local vsc = boxVsc(comp)
@@ -232,9 +240,9 @@ M.storeInt = storeInt
 
 M.storedFloat = storedFloat
 M.storedInt = storedInt
-M.storedsBoxedLike = storedsBoxedLike
-M.storedsLike = storedsLike
 
+M.storedBoxesLikedLike = storedBoxesLike
+M.storedsLike = storedsLike
 M.toggleComp = toggleComp
 M.toggleComps = toggleComps
 M.toggleFirstCompMatching = toggleFirstCompMatching

@@ -129,6 +129,8 @@ local function isLinkableItem(eid)
         and not entity_utils.isItemInInventory(eid) and EntityGetParent(eid) == 0
 end
 
+local function entityIn(ex, ey, x, y, r, v) return ex >= x - r and ex <= x + r and ey >= y - v and ey <= y + v end
+
 ---Returns linkables in range in one of two flavors: sequence or map
 ---@param altar entity_id the altar we're scanning with
 ---@param isUpper boolean whether the altar is the upper "target" altar
@@ -145,7 +147,7 @@ local function linkableItemsNear(altar, isUpper)
             --logger.about("linkable item found", eid)
             local ex, ey = EntityGetTransform(eid)
             local h = ((ex - x) ^ 2 + (ey - y) ^ 2) ^ 0.5
-            if h <= radius then
+            if h <= radius and entityIn(ex, ey, x, y, radius, 10) then
                 local innerId = comp_util.storedInt(eid, "innerId")
                 result[#result + 1] = { item = eid, x = ex, y = ey, innerId = innerId or 0 }
             end
@@ -153,8 +155,6 @@ local function linkableItemsNear(altar, isUpper)
     end
     return result
 end
-
-local function entityIn(ex, ey, x, y, r, v) return ex >= x - r and ex <= x + r and ey >= y - v and ey <= y + v end
 
 ---@class LinkMap
 ---@field item entity_id

@@ -1,32 +1,7 @@
 local comp_util = dofile_once("mods/offerings/lib/component_utils.lua") ---@type offering_component_util
 local logger = dofile("mods/offerings/lib/log_utils.lua") ---@type offering_logger
----@class WandStats
----@field fire_rate_wait integer[] -- gunaction_config
----@field reload_time integer[] -- gun_config
----@field spread_degrees integer[] -- gunaction_config
----@field deck_capacity integer[] -- gun_config
----@field mana_max integer[] -- no obj
----@field mana_charge_speed integer[] -- no obj
----@field shuffle_deck_when_empty integer[] -- gun_config abused boolean lol
-
----@class WandStatDef
----@field prop string
----@field obj string|nil
----@field formula string
 
 local M = {} ---@class offering_wand_util
-
----@type WandStatDef[]
-M.wandStatDefs = {
-    { prop = "fire_rate_wait",          obj = "gunaction_config", formula = "min" },
-    { prop = "reload_time",             obj = "gun_config",       formula = "min" },
-    { prop = "spread_degrees",          obj = "gunaction_config", formula = "min" },
-    { prop = "deck_capacity",           obj = "gun_config",       formula = "max" },
-    { prop = "mana_max",                obj = nil,                formula = "loop" },
-    { prop = "mana_charge_speed",       obj = nil,                formula = "loop" },
-    { prop = "shuffle_deck_when_empty", obj = "gun_config",       formula = "min" },
-}
-
 
 function M.isWand(eid) return EntityHasTag(eid, "wand") end
 
@@ -201,7 +176,7 @@ function M.storeWandStats(eid, hid)
     --logger.about("storing wand stats from", eid, "on holder", holder)
     local stats = M.injectAbilityIntoWandStats(nil, eid)
     EntityAddComponent2(hid, "AbilityComponent", {}) -- create empty ability component
-    M.setWandResult(hid, stats)                        -- set the empty ability component stats to be stored ones
+    M.setWandResult(hid, stats)                      -- set the empty ability component stats to be stored ones
 end
 
 ---Gather all the wand stats belonging to holder children of the altar.
@@ -217,3 +192,5 @@ function M.holderWandStats(altar)
     end
     return result
 end
+
+return M

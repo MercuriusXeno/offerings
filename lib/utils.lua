@@ -2,6 +2,22 @@ local M = {} ---@class offering_util
 
 function M.round(d, p) return math.floor(d * 10 ^ p + 0.5) / 10 ^ p end
 
+---Sum an array of numeric types
+---@param arr number[]
+---@return number
+function M.sum(arr)
+  local r = 0
+  for _, n in ipairs(arr) do r = r + n end
+  return r
+end
+
+---Return the number clamped to a min and max value provided
+---@param v number a value to clamp
+---@param l number the lower bound
+---@param r number the upper bound
+---@return number result the clamped value between bounds.
+function M.clamp(v, l, r) return math.min(r, math.max(l, v)) end
+
 function M.increment(t, f, v) t[f] = (t[f] or 0) + v end
 
 -- symmetric when s (shallowness) is 1
@@ -33,10 +49,12 @@ end
 ---@param description_line string
 ---@return string
 function M.appendDescription(result, description_line)
-    if result then
-        result = result .. "\n" .. description_line
-    else
-        result = description_line
-    end
-    return result
+  if result then
+    result = result .. "\n" .. description_line
+  else
+    result = description_line
+  end
+  return result
 end
+
+return M
