@@ -1,5 +1,5 @@
-local comp_util = dofile_once("mods/offerings/lib/component_utils.lua")
-local util = dofile_once("mods/offerings/lib/utils.lua")
+local comp_util = dofile_once("mods/offerings/lib/component_utils.lua") ---@type offering_component_util
+local util = dofile_once("mods/offerings/lib/utils.lua") ---@type offering_util
 
 ---@class offering_wand_stats
 ---@field gun_level number
@@ -29,7 +29,7 @@ local util = dofile_once("mods/offerings/lib/utils.lua")
 
 ---@class wand_stat_meta
 ---@field key wand_stat_key
----@field cObj gun_object|nil
+---@field cObj? gun_object
 ---@field cost number
 ---@field min fun(gunLevel: number):number
 ---@field max fun(gunLevel: number):number
@@ -42,8 +42,6 @@ local util = dofile_once("mods/offerings/lib/utils.lua")
 
 ---@class wand_stat_definition:wand_stat_meta
 local meta = {}
-setmetatable(meta, { __index = meta })
-setmetatable(meta, { __call = function(cls, def) return cls:new(def) end })
 
 ---Insert a new wandStatDefinition into the table.
 ---@param t wand_stat_definition
@@ -123,11 +121,11 @@ end
 -- ---| "cost"
 
 local function ramp(startLevel, factor, offset)
-    local f = function rampFunction(gunLevel)
+    local function rampFunction(gunLevel)
         if gunLevel >= startLevel then return gunLevel * factor + offset end
         return offset
     end
-    return f
+    return rampFunction
 end
 
 meta:makeDef("gun_level", 100, ramp(0, 0))
