@@ -1,5 +1,6 @@
 <Entity
     name="offering_draining_entity">
+    <Transform />
     <MaterialSuckerComponent
         _tags="enabled_in_world,enabled_in_hand"
         _enabled="0"
@@ -25,5 +26,6 @@
 
     <LuaComponent
         script_source_file="mods/offerings/entity/draining.lua"
+        execute_on_added="1"
         execute_every_n_frame="1"></LuaComponent>
 </Entity>

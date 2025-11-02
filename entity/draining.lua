@@ -37,7 +37,7 @@ local function getDrainParams(d, dx, dy)
     local barrel = comp_util.component_get(parentMsc, "barrel_size")
     local amount = comp_util.component_get(parentMsc, "mAmountUsed")
     result.space = barrel - amount
-    result.msc = comp_util.first_component(eid, "MaterialSuckerComponent", nil)
+    result.msc = comp_util.first_component(d, "MaterialSuckerComponent", nil)
     if not result.msc then return result end
 
     result.isActive = true
