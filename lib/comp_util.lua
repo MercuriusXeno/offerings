@@ -1,6 +1,6 @@
-local utils = dofile_once("mods/offerings/lib/utils.lua")
+local util = dofile_once("mods/offerings/lib/util.lua")
 
---local logger = dofile("mods/offerings/lib/log_utils.lua") ---@type offering_logger
+--local logger = dofile_once("mods/offerings/lib/log_util.lua") ---@type offering_logger
 
 local VSC = "VariableStorageComponent"
 
@@ -32,7 +32,7 @@ local function componentsWhere(eid, ctype, tag, pred)
 end
 
 ---Return an object's property in a comp
----@param comp component_id
+---@param comp component_id?
 ---@param field string the field name
 ---@return any
 local function cGet(comp, field)
@@ -61,7 +61,7 @@ end
 
 local function cMatch(comp, field, val)
   local compVal = cGet(comp, field)
-  if type(val) == "table" and type(compVal) == "table" then return utils.arrayEquals(val, compVal) end
+  if type(val) == "table" and type(compVal) == "table" then return util.arrayEquals(val, compVal) end
   return val == compVal
 end
 
@@ -218,15 +218,15 @@ end
 
 local M = {}---@class offering_component_util
 
-M.cGet = cGet
-M.cObjGet = cObjGet
-M.cObjSet = cObjSet
-M.cSet = cSet
+M.component_get = cGet
+M.component_object_get = cObjGet
+M.component_object_set = cObjSet
+M.component_set = cSet
 
 M.eachComponentSet = eachComponentSet
 M.eachEntityComponent = eachEntityComponent
 
-M.firstComponent = firstComponent
+M.first_component = firstComponent
 M.firstComponentMatching = firstComponentMatching
 
 M.hasCompLike = hasCompLike
@@ -241,7 +241,7 @@ M.storeInt = storeInt
 M.storedFloat = storedFloat
 M.storedInt = storedInt
 
-M.storedBoxesLikedLike = storedBoxesLike
+M.storedBoxesLike = storedBoxesLike
 M.storedsLike = storedsLike
 M.toggleComp = toggleComp
 M.toggleComps = toggleComps

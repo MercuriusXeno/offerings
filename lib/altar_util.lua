@@ -1,11 +1,12 @@
 dofile_once("data/scripts/lib/utilities.lua")
-local flask_utils = dofile_once("mods/offerings/lib/flask_utils.lua") ---@type offering_flask_util
-local wand_utils = dofile_once("mods/offerings/lib/wand_utils.lua") ---@type offering_wand_util
 
-local comp_util = dofile_once("mods/offerings/lib/component_utils.lua") ---@type offering_component_util
-local entity_utils = dofile_once("mods/offerings/lib/entity_utils.lua") ---@type offering_entity_util
-local logger = dofile("mods/offerings/lib/log_utils.lua") ---@type offering_logger
+local flask_util = dofile_once("mods/offerings/lib/flask_util.lua") ---@type offering_flask_util
+local comp_util = dofile_once("mods/offerings/lib/comp_util.lua") ---@type offering_component_util
+local entity_util = dofile_once("mods/offerings/lib/entity_util.lua") ---@type offering_entity_util
+local logger = dofile_once("mods/offerings/lib/log_util.lua") ---@type log_util
+local wand_util = dofile_once("mods/offerings/lib/wand_util.lua") ---@type wand_util
 
+--logger.about("wand_util contents:", wand_util)
 
 local VSC = "VariableStorageComponent"
 local IC = "ItemComponent"
@@ -66,19 +67,23 @@ local function isLowerAltar(eid) return EntityHasTag(eid, lowerAltarTag) end
 
 local function isAltar(eid) return isUpperAltar(eid) or isLowerAltar(eid) end
 
-local function upperAltarNear(eid) return entity_utils.closestToEntity(eid, upperAltarTag) end
+local function upperAltarNear(eid) return entity_util.closestToEntity(eid, upperAltarTag) end
 
-local function lowerAltarNear(eid) return entity_utils.closestToEntity(eid, lowerAltarTag) end
+local function lowerAltarNear(eid) return entity_util.closestToEntity(eid, lowerAltarTag) end
 
 local function toggleAltarRunes(altar, isLitUp)
     comp_util.toggleFirstCompMatching(altar, PEC, nil, "gravity", { 0, 0 }, isLitUp)
 end
 
-local function isValidTarget(eid) return wand_utils.isWand(eid) or flask_utils.isFlask(eid) end
+local function isWand(eid) return EntityHasTag(eid, "wand") end
 
-local function isWandMatch(target, offer) return wand_utils.isWand(target) and wand_utils.isWandEnhancer(offer) end
+local function isWandEnhancer(eid) return isWand(eid) end
 
-local function isFlaskMatch(target, offer) return flask_utils.isFlask(target) and flask_utils.isFlaskEnhancer(offer) end
+local function isValidTarget(eid) return isWand(eid) or flask_util.isFlask(eid) end
+
+local function isWandMatch(target, offer) return isWand(target) and isWandEnhancer(offer) end
+
+local function isFlaskMatch(target, offer) return flask_util.isFlask(target) and flask_util.isFlaskEnhancer(offer) end
 
 ---Test that the target can be improved by the offering
 ---@param target entity_id The linked item on the upper altar
@@ -117,7 +122,7 @@ end
 ---@param seen SeenItem
 local function isMissingItemPickedUp(seen)
     --logger.about("entity picked up item", isItemInInventory(seen.item))
-    if entity_utils.isItemInInventory(seen.item) then return true end
+    if entity_util.isItemInInventory(seen.item) then return true end
     return false
 end
 
@@ -125,8 +130,8 @@ local function isLinkableItem(eid)
     --logger.about("eid", eid, "is altar?", isAltar(eid), "isWandEnhancer?", isWandEnhancer(eid),
     --     "isFlaskEnhancer?", isFlaskEnhancer(eid), "isItemInInventory?", isItemInInventory(eid),
     --     "is any parent?", EntityGetParent(eid) == 0)
-    return not isAltar(eid) and (wand_utils.isWandEnhancer(eid) or flask_utils.isFlaskEnhancer(eid))
-        and not entity_utils.isItemInInventory(eid) and EntityGetParent(eid) == 0
+    return not isAltar(eid) and (isWandEnhancer(eid) or flask_util.isFlaskEnhancer(eid))
+        and not entity_util.isItemInInventory(eid) and EntityGetParent(eid) == 0
 end
 
 local function entityIn(ex, ey, x, y, r, v) return ex >= x - r and ex <= x + r and ey >= y - v and ey <= y + v end
@@ -197,7 +202,7 @@ end
 
 local function childSpellItem(eid)
     if not EntityHasTag(eid, "card_action") then return nil end
-    return comp_util.firstComponent(eid, "ItemComponent", nil)
+    return comp_util.first_component(eid, "ItemComponent", nil)
 end
 
 local function isAlwaysCastSpellComponent(eid)
@@ -238,20 +243,20 @@ local function forceUpdates(altar, eid, isResetting)
     local lowerAltar = lowerAltarNear(altar)
     local target = targetOfAltar(upperAltar)
     if target == nil then return false end
-    if wand_utils.isWand(eid) then
+    if isWand(eid) then
         local combinedWands = nil
         if not isResetting then
-            combinedWands = wand_utils.mergeWandStats(upperAltar, lowerAltar)
+            combinedWands = wand_util:gather_altar_wand_stats_and_merge(upperAltar, lowerAltar)
         end
-        --logger.about("combined stats after severance recalc", combined)
-        wand_utils.setWandResult(target.item, combinedWands)
+        --logger.about("combined stats after severance recalc", combinedWands)
+        wand_util:set_wand_result(target.item, combinedWands)
     end
-    if flask_utils.isFlask(eid) then
+    if flask_util.isFlask(eid) then
         local combinedFlasks = nil
         if not isResetting then
-            combinedFlasks = flask_utils.mergeFlaskStats(upperAltar, lowerAltar)
+            combinedFlasks = flask_util.mergeFlaskStats(upperAltar, lowerAltar)
         end
-        flask_utils.setFlaskResult(target.item, combinedFlasks)
+        flask_util.setFlaskResult(target.item, combinedFlasks)
     end
 end
 
@@ -278,6 +283,7 @@ local function relink(altar, missing, relinkTo)
     -- our objective is to *reset* the upper altar, not
     -- to regenerate the stats. It will have lost its originals.
     if upperAltar == altar then
+        --logger.about("upper altar needs reset", true, "item missing", missing)
         forceUpdates(altar, missing)
     end
     return result
@@ -314,16 +320,16 @@ end
 local function destroyAltarItemsUsedInTarget(target, altar)
     --logger.about("destroying offerings after picking up", target)
     local function shouldDestroy(offer)
-        if wand_utils.isWand(target) then return wand_utils.isWandEnhancer(offer) end
-        if flask_utils.isFlask(target) then return flask_utils.isFlaskEnhancer(offer) end
+        if isWand(target) then return isWandEnhancer(offer) end
+        if flask_util.isFlask(target) then return flask_util.isFlaskEnhancer(offer) end
         return false
     end
     local function destroy(offer)
         -- before destroying flasks, empty them
-        if flask_utils.isFlask(offer) then RemoveMaterialInventoryMaterial(offer) end
+        if flask_util.isFlask(offer) then RemoveMaterialInventoryMaterial(offer) end
         -- before destroying wands, drop their spells
         local x, y = EntityGetTransform(offer)
-        if wand_utils.isWand(offer) then dropSpells(offer, x, y) end
+        if isWand(offer) then dropSpells(offer, x, y) end
 
         EntityLoad("data/entities/particles/destruction.xml", x, y)
         GamePlaySound("data/audio/Desktop/projectiles.bank", "magic/common_destroy", x, y)
@@ -335,10 +341,6 @@ local function destroyAltarItemsUsedInTarget(target, altar)
     for _, linkMap in ipairs(linkedItemsArray(altar)) do
         if shouldDestroy(linkMap.item) then destroy(linkMap.item) end
     end
-end
-
-local function isLinked(altar, item)
-    return linkedItemsMap(altar)[item] ~= nil
 end
 
 ---Create a holder entity sired by the altar, attached to the item
@@ -373,7 +375,7 @@ local function setLinkedItemBehaviors(altar, isUpper, seen, hid)
         local x, y = EntityGetTransform(altar)
         local dx = isUpper and x or seen.x
         local dy = y - 5 -- floaty
-        local uprightRot = wand_utils.isWand(seen.item) and -math.pi * 0.5 or 0.0
+        local uprightRot = isWand(seen.item) and -math.pi * 0.5 or 0.0
         EntitySetTransform(seen.item, dx, dy, uprightRot)
         -- ensure the item holder matches the item's new location
         seen.x = dx
@@ -385,7 +387,7 @@ local function setLinkedItemBehaviors(altar, isUpper, seen, hid)
     -- make "first time pickup" fanfare when picking the item up
     comp_util.eachComponentSet(seen.item, IC, nil, "has_been_picked_by_player", not isItemLinked)
 
-    if wand_utils.isWand(seen.item) then
+    if isWand(seen.item) then
         -- immobilize wands
         comp_util.eachComponentSet(seen.item, IC, nil, "play_hover_animation", not isItemLinked)
         comp_util.eachComponentSet(seen.item, IC, nil, "play_spinning_animation", not isItemLinked)
@@ -396,7 +398,7 @@ local function setLinkedItemBehaviors(altar, isUpper, seen, hid)
 
     -- re-enables the first time pickup particles, which are fancy
     if isUpper then
-        local pickup = wand_utils.isWand(seen.item) and pickupWand or pickupFlask
+        local pickup = isWand(seen.item) and pickupWand or pickupFlask
         if isItemLinked and not comp_util.hasCompMatch(seen.item, LC, nil, pickupLua, pickup[pickupLua]) then
             EntityAddComponent2(seen.item, LC, pickup)
         else
@@ -510,15 +512,15 @@ function M.targetLinkFunc(upperAltar, seen, linkedCount)
     local holder = makeHolderLink(upperAltar, seen, linkedCount + 1)
     setLinkedItemBehaviors(upperAltar, true, seen, holder)
     --logger.about("holder", holder, "holder wand", seen.item)
-    if wand_utils.isWand(seen.item) then
-        if holder then wand_utils.storeWandStats(seen.item, holder) end
-        local combinedWands = wand_utils.mergeWandStats(upperAltar, lowerAltarNear(upperAltar))
-        wand_utils.setWandResult(seen.item, combinedWands)
-    elseif flask_utils.isFlask(seen.item) then
+    if isWand(seen.item) then
+        if holder then wand_util:store_wand_stats_in_holder(seen.item, holder) end
+        local combinedWands = wand_util:gather_altar_wand_stats_and_merge(upperAltar, lowerAltarNear(upperAltar))
+        wand_util:set_wand_result(seen.item, combinedWands)
+    elseif flask_util.isFlask(seen.item) then
         --logger.about("holder", holder, "holder flask", eid)
-        if holder then flask_utils.storeFlaskStats(seen.item, holder) end
-        local combinedFlasks = flask_utils.mergeFlaskStats(upperAltar, lowerAltarNear(upperAltar))
-        flask_utils.setFlaskResult(seen.item, combinedFlasks)
+        if holder then flask_util.storeFlaskStats(seen.item, holder) end
+        local combinedFlasks = flask_util.mergeFlaskStats(upperAltar, lowerAltarNear(upperAltar))
+        flask_util.setFlaskResult(seen.item, combinedFlasks)
     end
     return true
 end
@@ -537,15 +539,15 @@ function M.offerLinkFunc(lowerAltar, seen, linkedCount)
     if not isValidOffer(target.item, seen.item) then return false end
     local holder = makeHolderLink(lowerAltar, seen, linkedCount + 1)
     setLinkedItemBehaviors(lowerAltar, false, seen, holder)
-    if wand_utils.isWandEnhancer(seen.item) then
-        if holder then wand_utils.storeWandStats(seen.item, holder) end
-        local combined = wand_utils.mergeWandStats(upperAltar, lowerAltar)
-        wand_utils.setWandResult(target.item, combined)
+    if isWandEnhancer(seen.item) then
+        if holder then wand_util:store_wand_stats_in_holder(seen.item, holder) end
+        local combined = wand_util:gather_altar_wand_stats_and_merge(upperAltar, lowerAltar)
+        wand_util:set_wand_result(target.item, combined)
     end
-    if flask_utils.isFlaskEnhancer(seen.item) then
-        if holder then flask_utils.storeFlaskStats(seen.item, holder) end
-        local combined = flask_utils.mergeFlaskStats(upperAltar, lowerAltar)
-        flask_utils.setFlaskResult(target.item, combined)
+    if flask_util.isFlaskEnhancer(seen.item) then
+        if holder then flask_util.storeFlaskStats(seen.item, holder) end
+        local combined = flask_util.mergeFlaskStats(upperAltar, lowerAltar)
+        flask_util.setFlaskResult(target.item, combined)
     end
     return true
 end
@@ -560,12 +562,12 @@ function M.offerSever(altar, seenItem) end
 ---@param seenItem SeenItem The item id being restored
 function M.targetSever(altar, seenItem)
     --logger.about("restoring item ", seenItem)
-    if wand_utils.isWand(seenItem.item) then
-        local combinedWands = wand_utils.mergeWandStats(altar, nil)
-        wand_utils.setWandResult(seenItem.item, combinedWands)
-    elseif flask_utils.isFlask(seenItem.item) then
-        local combinedFlasks = flask_utils.mergeFlaskStats(altar, nil)
-        flask_utils.setFlaskResult(seenItem.item, combinedFlasks)
+    if isWand(seenItem.item) then
+        local combinedWands = wand_util:gather_altar_wand_stats_and_merge(altar, nil)
+        wand_util:set_wand_result(seenItem.item, combinedWands)
+    elseif flask_util.isFlask(seenItem.item) then
+        local combinedFlasks = flask_util.mergeFlaskStats(altar, nil)
+        flask_util.setFlaskResult(seenItem.item, combinedFlasks)
     end
 end
 

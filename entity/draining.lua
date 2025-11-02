@@ -1,7 +1,7 @@
-local comp_util = dofile_once("mods/offerings/lib/component_utils.lua")
-local logger = dofile_once("mods/offerings/lib/log_utils.lua") ---@type offering_logger
+local comp_util = dofile_once("mods/offerings/lib/comp_util.lua")
+local logger = dofile_once("mods/offerings/lib/log_util.lua") ---@type log_util
 
-logger.about("draining lua firing")
+--logger.about("draining lua firing")
 local eid = GetUpdatedEntityID()
 local x, y = DEBUG_GetMouseWorld()
 EntitySetTransform(eid, x, y)
@@ -45,7 +45,7 @@ local function getDrainParams(d, dx, dy)
 end
 
 local drainParams = getDrainParams(eid, x, y)
-logger.about("drain params", drainParams)
+--logger.about("drain params", drainParams)
 if not drainParams.isActive then return end
 comp_util.toggleComp(eid, drainParams.msc, drainParams.isActive)
 comp_util.cSet(drainParams.msc, "barrel_size", drainParams.space)
@@ -61,7 +61,7 @@ for k, m in pairs(ourMaterials) do
             amount = amount + parentMaterials[k]
         end
         local material = CellFactory_GetName(k - 1)
-        logger.about("transferring material", material, "amount", amount, "from", eid, "to", drainParams.heldItem)
+        --logger.about("transferring material", material, "amount", amount, "from", eid, "to", drainParams.heldItem)
         AddMaterialInventoryMaterial(drainParams.heldItem, material, amount)
         RemoveMaterialInventoryMaterial(eid, material)
     end

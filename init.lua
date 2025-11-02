@@ -1,5 +1,5 @@
 dofile_once("data/scripts/lib/utilities.lua")
-local logger = dofile_once("mods/offerings/lib/log_utils.lua") ---@type offering_logger
+local logger = dofile_once("mods/offerings/lib/log_util.lua") ---@type log_util
 
 ModMaterialsFileAdd("mods/offerings/misc/materials.xml")
 

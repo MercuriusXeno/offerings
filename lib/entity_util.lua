@@ -1,6 +1,6 @@
-local comp_util = dofile_once("mods/offerings/lib/component_utils.lua") ---@type offering_component_util
+local comp_util = dofile_once("mods/offerings/lib/comp_util.lua") ---@type offering_component_util
 
--- local logger = dofile("mods/offerings/lib/log_utils.lua") ---@type offering_logger
+-- local logger = dofile_once("mods/offerings/lib/log_util.lua") ---@type offering_logger
 
 local M = {} ---@class offering_entity_util
 
@@ -24,8 +24,8 @@ function M.closestToEntity(eid, tag) return M.closest(tag, EntityGetTransform(ei
 ---@param description string
 function M.setDescription(eid, description)
     if description == "" then return end
-    local comp = comp_util.firstComponent(eid, "ItemComponent", nil)
-    comp_util.cSet(comp, "ui_description", description)
+    local comp = comp_util.first_component(eid, "ItemComponent", nil)
+    comp_util.component_set(comp, "ui_description", description)
 end
 
 return M

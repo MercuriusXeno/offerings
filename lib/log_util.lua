@@ -1,13 +1,12 @@
 dofile_once("data/scripts/lib/utilities.lua")
-local logger = {} ---@class offering_logger
+local logger = {} ---@class log_util
 logger.debug_prefix = "-== OFFERINGS_DEBUG ==-   "
 function logger.isDebug() return true end
 
 function logger.debugOut(s)
-    if logger.isDebug() then return end
+    if not logger.isDebug() then return end
 
     if s == "" then return end
-    GamePrint(logger.debug_prefix .. s)
     print(logger.debug_prefix .. s)
 end
 
