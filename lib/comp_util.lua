@@ -1,6 +1,4 @@
-local util = dofile_once("mods/offerings/lib/util.lua")
-
---local logger = dofile_once("mods/offerings/lib/log_util.lua") ---@type offering_logger
+local util = dofile_once("mods/offerings/lib/util.lua") ---@type offering_util
 
 local VSC = "VariableStorageComponent"
 
@@ -35,14 +33,14 @@ end
 ---@param comp component_id?
 ---@param field string the field name
 ---@return any
-local function cGet(comp, field)
+local function component_get(comp, field)
   if not comp then return nil end
   local v = { ComponentGetValue2(comp, field) }
   if #v == 1 then return v[1] end
   return v
 end
 
-local function cSet(comp, field, ...)
+local function component_set(comp, field, ...)
   ComponentSetValue2(comp, field, ...)
 end
 
@@ -60,13 +58,13 @@ local function cObjSet(comp, obj, field, ...)
 end
 
 local function cMatch(comp, field, val)
-  local compVal = cGet(comp, field)
+  local compVal = component_get(comp, field)
   if type(val) == "table" and type(compVal) == "table" then return util.arrayEquals(val, compVal) end
   return val == compVal
 end
 
 local function cLike(comp, field, value)
-  return cGet(comp, field):find(value)
+  return component_get(comp, field):find(value)
 end
 
 -- Iteration helpers
@@ -89,7 +87,7 @@ local function eachEntityComponentLike(eid, ctype, tag, field, val, func)
 end
 
 -- First/getters
-local function firstComponent(eid, ctype, tag)
+local function first_component(eid, ctype, tag)
   if tag == nil then
     return EntityGetFirstComponentIncludingDisabled(eid, ctype) or nil
   else
@@ -138,7 +136,7 @@ end
 -- Bulk setters
 local function eachComponentSet(eid, ctype, tag, field, ...)
   local comps = componentsOfType(eid, ctype, tag)
-  for _, comp in ipairs(comps) do cSet(comp, field, ...) end
+  for _, comp in ipairs(comps) do component_set(comp, field, ...) end
 end
 
 -- Removal helpers
@@ -165,13 +163,13 @@ end
 
 local function unboxVsc(comp, specificField)
   if not comp then return nil end
-  return cGet(comp, specificField)
+  return component_get(comp, specificField)
 end
 
 local function boxVsc(comp)
   if not comp then return nil end
   local t = {}
-  local function push(field) t[field] = cGet(comp, field) end
+  local function push(field) t[field] = component_get(comp, field) end
   push("name") -- always push name!
   for _, field in ipairs(vscFields) do push(field) end
   return t
@@ -218,15 +216,15 @@ end
 
 local M = {}---@class offering_component_util
 
-M.component_get = cGet
+M.component_get = component_get
 M.component_object_get = cObjGet
 M.component_object_set = cObjSet
-M.component_set = cSet
+M.component_set = component_set
 
 M.eachComponentSet = eachComponentSet
 M.eachEntityComponent = eachEntityComponent
 
-M.first_component = firstComponent
+M.first_component = first_component
 M.firstComponentMatching = firstComponentMatching
 
 M.hasCompLike = hasCompLike

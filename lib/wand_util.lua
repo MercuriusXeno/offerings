@@ -429,7 +429,7 @@ local stat_configs = {
         base = 60.0,
         inverted = true,
         delta = 1.0,
-        growth = 1.05,
+        growth = 2.0,
         perfect = -240.0,
         total_cost_of_perfection = 12000.0
     },
@@ -440,7 +440,7 @@ local stat_configs = {
         base = 0.8,
         inverted = false,
         delta = 0.01,
-        growth = 1.025,
+        growth = 2.0,
         perfect = 10.0,
         total_cost_of_perfection = 18400.0
     },
@@ -451,7 +451,7 @@ local stat_configs = {
         base = 16.0,
         inverted = true,
         delta = 1.0,
-        growth = 1.00,
+        growth = 2.0,
         perfect = -1440.0,
         total_cost_of_perfection = 10960.0
     },
@@ -462,7 +462,7 @@ local stat_configs = {
         base = 16.0,
         inverted = true,
         delta = 1.0,
-        growth = 1.05,
+        growth = 2.0,
         perfect = -240.0,
         total_cost_of_perfection = 10240.0
     },

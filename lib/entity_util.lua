@@ -1,7 +1,5 @@
 local comp_util = dofile_once("mods/offerings/lib/comp_util.lua") ---@type offering_component_util
 
--- local logger = dofile_once("mods/offerings/lib/log_util.lua") ---@type offering_logger
-
 local M = {} ---@class offering_entity_util
 
 function M.itemNameContains(eid, s) return comp_util.hasCompLike(eid, "ItemComponent", nil, "item_name", s) end
