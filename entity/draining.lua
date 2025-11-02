@@ -18,7 +18,7 @@ EntitySetTransform(eid, x, y)
 ---@param dy number the y coord of the drain
 ---@return DrainParams
 local function getDrainParams(d, dx, dy)
-    local result = { heldItem = nil, space = 50, msc = nil, isActive = false} ---@type DrainParams
+    local result = { heldItem = nil, space = 50, msc = nil, isActive = false } ---@type DrainParams
     local player = EntityGetClosestWithTag(dx, dy, "player_unit")
     if not player then return result end
 
@@ -29,7 +29,7 @@ local function getDrainParams(d, dx, dy)
     if not result.heldItem then return result end
     local enchantVsc = comp_util.firstComponentMatching(result.heldItem, "VariableStorageComponent",
         nil, "name", "offering_flask_enchant_draining")
-    if not enchantVsc then return result end
+    if not enchantVsc or comp_util.storedInt(result.heldItem, "offering_flask_enchant_draining") == 0 then return result end
 
     local parentMsc = comp_util.first_component(result.heldItem, "MaterialSuckerComponent", nil)
     if not parentMsc then return result end
