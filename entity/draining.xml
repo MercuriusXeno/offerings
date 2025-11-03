@@ -1,6 +1,5 @@
-<Entity
-    name="offering_draining_entity">
-    <Transform />
+<Entity name="offering_draining_entity">
+    <TransformComponent />
     <MaterialSuckerComponent
         _tags="enabled_in_world,enabled_in_hand"
         _enabled="0"

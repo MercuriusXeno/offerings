@@ -18,7 +18,16 @@ EntitySetTransform(eid, x, y)
 ---@param dy number the y coord of the drain
 ---@return DrainParams
 local function getDrainParams(d, dx, dy)
-    local result = { heldItem = nil, space = 50, msc = nil, isActive = false } ---@type DrainParams
+     ---@type DrainParams
+    local result =
+    {
+        heldItem = nil,
+        space = 50,
+        msc = comp_util.first_component(d, "MaterialSuckerComponent", nil),
+        isActive = false
+    }
+    if not result.msc then return result end
+
     local player = EntityGetClosestWithTag(dx, dy, "player_unit")
     if not player then return result end
 
@@ -37,8 +46,6 @@ local function getDrainParams(d, dx, dy)
     local barrel = comp_util.component_get(parentMsc, "barrel_size")
     local amount = comp_util.component_get(parentMsc, "mAmountUsed")
     result.space = barrel - amount
-    result.msc = comp_util.first_component(d, "MaterialSuckerComponent", nil)
-    if not result.msc then return result end
 
     result.isActive = true
     return result
@@ -46,8 +53,9 @@ end
 
 local drainParams = getDrainParams(eid, x, y)
 --logger.about("drain params", drainParams)
-if not drainParams.isActive then return end
 comp_util.toggleComp(eid, drainParams.msc, drainParams.isActive)
+-- don't do anything else, just turn the comp off and exit.
+if not drainParams.isActive then return end
 comp_util.component_set(drainParams.msc, "barrel_size", drainParams.space)
 local mic = comp_util.first_component(eid, "MaterialInventoryComponent", nil)
 local parentMic = comp_util.first_component(drainParams.heldItem, "MaterialInventoryComponent", nil)
