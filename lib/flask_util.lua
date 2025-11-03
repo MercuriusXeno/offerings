@@ -166,16 +166,12 @@ end
 function M.makeInstant(eid, level)
     M.storeEnchantKey(eid, "instant", level)
     --logger.about("instant-ing", eid, "level", level)
-    local barrel_size = comp_util.valueOrDefault(eid, MSC, "barrel_size", 1000)
+    local barrel_size = comp_util.valueOrDefault(eid, MSC, "barrel_size", 1000) or 1000--- @type number
     local potionComp = comp_util.first_component(eid, "PotionComponent", nil)
     comp_util.component_set(potionComp, "throw_bunch", level == 1)
-    comp_util.component_set(potionComp, "throw_how_many", barrel_size)
+    comp_util.component_set(potionComp, "throw_how_many", math.floor(math.pow(barrel_size, 0.8)))
 end
 
-local drainingScript = {
-    script_source_file = "mods/offerings/entity/draining.lua",
-    execute_every_n_frame = 1
-}
 local drainXml = "mods/offerings/entity/draining.xml"
 function M.makeDraining(eid, level)
     M.storeEnchantKey(eid, "draining", level)
