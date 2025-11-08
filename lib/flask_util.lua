@@ -141,9 +141,7 @@ function M.makeTempered(eid, level)
     comp_util.toggleComp(eid, dc, level == 0)
 
     local pisc = comp_util.first_component(eid, PISC, nil)
-    --local normieGlass = CellFactory_GetType("glass")
     local temperedGlass = CellFactory_GetType("offering_tempered_glass_box2d")
-    --logger.about("tempered glass material", temperedGlass, "normie glass", normieGlass)
     comp_util.component_set(pisc, "material", temperedGlass)
 end
 
@@ -556,7 +554,7 @@ function M.setFlaskResult(flask, combined)
     comp_util.component_set(potion, "spray_velocity_normalized_min", combined.spray_velocity_normalized_min[1])
     comp_util.component_set(potion, "throw_how_many", combined.throw_how_many[1])
     comp_util.component_set(potion, "dont_spray_just_leak_gas_materials", false)
-    if combined.barrel_size[1] > 10000 then comp_util.component_set(potion, "throw_bunch", true) end
+    comp_util.component_set(potion, "throw_bunch", false)
 
     for _, def in ipairs(M.flaskEnchantDefs) do
         local level = combined.enchantments[def.key] or 0
