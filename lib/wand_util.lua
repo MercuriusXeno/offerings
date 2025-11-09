@@ -111,7 +111,6 @@ end
 function wand_util:make_stats()
     local stats = {} ---@type wand_stats
     for _, k in ipairs(key_array) do
-        -- logger.log("building util key", k, "with wand util", self);
         local d = self[k]
         stats[k] = d.base
     end
@@ -127,12 +126,10 @@ function wand_util:convert_to_wand_stats(eid)
     if not comp then return result end
     for _, key in ipairs(key_array) do
         local def = self[key]
-        --logger.log("wand stat def", def)
         local value = def:pull(comp)
         if type(value) == "boolean" then value = value and 1 or 0 end
         result[key] = value
     end
-    --logger.log("wand stats of scraped", result, "from entity", eid)
     return result
 end
 
@@ -208,7 +205,6 @@ function stat_def_mt:value_from_worth(worth)
         local distance = steps_from_base * self.step_size
         local direction_flip = (self.inverted == (worth < 0)) and 1 or -1
         local unclamped_result = self.base + direction_flip * distance
-        logger.log("  linear worth of " .. self.key .. " x" .. pretty(worth) .. ": " .. pretty(distance))
         result = self:clamp(unclamped_result)
     else
         local unsigned_worth = math.abs(worth)
@@ -219,10 +215,8 @@ function stat_def_mt:value_from_worth(worth)
         local distance = steps_from_base * self.step_size
         local direction_flip = (self.inverted == (worth < 0)) and 1 or -1
         local unclamped_result = self.base + direction_flip * distance
-        logger.log("  quadratic worth of " .. self.key .. " x" .. pretty(worth) .. ": " .. pretty(distance))
         result = self:clamp(unclamped_result)
     end
-    logger.log("  -> " .. pretty(result))
     return result
 end
 
@@ -262,30 +256,14 @@ end
 ---@param offerings wand_stats[] All wands stats as an array of stats holders.
 ---@return wand_stats
 function wand_util:collapse_stat_sums(stats, offerings)
-    --local overflow = 0 -- for overflow or paying taxes
-    logger.log("merging stats of wands")
     for _, key in ipairs(key_array) do
         local def = self[key]
-        local was = stats[key]
-        local worth = def:worth_from_value(was)
-        local log_base_stat_line = "key " .. key .. " was " .. pretty(was) .. " worth " .. pretty(worth)
-        logger.log("from ", log_base_stat_line)
-        for i, offer in ipairs(offerings) do
-            local offering_worth = def:worth_from_value(offer[key])
-            logger.log("  offering " .. tostring(i), pretty(offer[key]) .. " worth " .. pretty(offering_worth))
-            worth = worth + offering_worth
+        local worth = def:worth_from_value(stats[key])
+        for _, offer in ipairs(offerings) do
+            worth = worth + def:worth_from_value(offer[key])
         end
-        local result = def:value_from_worth(worth)
-        -- leftover worth gets fed through a round-robin improvement system?
-        -- experimental thingy may be bad/lack good agency.
-        --overflow = overflow + (worth - def:worth_from_value(result))
-        local overflow = 0 -- just ignore this
-        local log_result_stat_line = "total " ..
-            pretty(worth) .. " worth -> " .. pretty(result) .. ", waste " .. pretty(overflow)
-        logger.log("to ", log_result_stat_line)
-        stats[key] = result
+        stats[key] = def:value_from_worth(worth)
     end
-    -- logger.log("injected wand result", stats, "overflowing cost", overflow)
     return stats
 end
 
@@ -322,7 +300,7 @@ end
 ---Store a wand's stats in a holder linking to the item.
 ---@param eid entity_id the wand being added to the altar
 ---@param hid entity_id the holder of the wand representative
-function wand_util:store_wand_stats_in_holder(eid, hid)
+function wand_util:set_holder_wand_stats(eid, hid)
     -- if the holder doesn't align DO NOT overwrite its stats
     if comp_util.get_int(hid, "eid") ~= eid then return end
     local ability = comp_util.get_or_create_comp(hid, "AbilityComponent", nil)

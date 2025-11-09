@@ -129,7 +129,7 @@ end
 ---@param field string
 ---@param value any
 ---@return boolean
-function M.has_component_of_type_with_field_like(eid, ctype, tag, field, value)
+function M.has_component_field_value_equal(eid, ctype, tag, field, value)
   return M.first_component_of_type_with_field_like(eid, ctype, tag, field, value) ~= nil
 end
 

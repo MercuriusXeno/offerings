@@ -6,8 +6,6 @@ local entity_util = dofile_once("mods/offerings/lib/entity_util.lua") ---@type o
 local logger = dofile_once("mods/offerings/lib/log_util.lua") ---@type log_util
 local wand_util = dofile_once("mods/offerings/lib/wand_util.lua") ---@type wand_util
 
---logger.log("wand_util contents:", wand_util)
-
 local VSC = "VariableStorageComponent"
 local IC = "ItemComponent"
 local LC = "LuaComponent"
@@ -65,9 +63,9 @@ function M.is_lower_altar(eid) return EntityHasTag(eid, LOWER_ALTAR_TAG) end
 
 function M.is_altar(eid) return M.is_upper_altar(eid) or M.is_lower_altar(eid) end
 
-function M.get_upper_altar_near(eid) return entity_util.get_nearest_entity_with_tag(eid, UPPER_ALTAR_TAG) end
+function M.get_upper_altar_near(eid) return entity_util.get_entity_with_tag_nearest_to_entity(eid, UPPER_ALTAR_TAG) end
 
-function M.get_lower_altar_near(eid) return entity_util.get_nearest_entity_with_tag(eid, LOWER_ALTAR_TAG) end
+function M.get_lower_altar_near(eid) return entity_util.get_entity_with_tag_nearest_to_entity(eid, LOWER_ALTAR_TAG) end
 
 function M.toggle_altar_runes(altar, isLitUp)
     comp_util.toggle_first_comp_matching(altar, PEC, nil, "gravity", { 0, 0 }, isLitUp)
@@ -297,7 +295,7 @@ end
 function M.refresh_result(item_triggering_update, item_to_update, upper_altar,
                           lower_altar, holder, wand_id_function, flask_id_function)
     if wand_id_function(item_triggering_update) then
-        if holder then wand_util:store_wand_stats_in_holder(item_to_update, holder) end
+        if holder then wand_util:set_holder_wand_stats(item_to_update, holder) end
         wand_util:set_wand_result(item_to_update, wand_util:merge_wand_stats(upper_altar, lower_altar))
     elseif flask_id_function(item_triggering_update) then
         if holder then flask_util.store_flask_stats(item_to_update, holder) end
@@ -358,7 +356,6 @@ function M.sever(altar, eid, is_pickup)
 end
 
 function M.destroy_used_offerings(target, altar)
-    --logger.log("destroying offerings after picking up", target)
     local function is_destroying(offer)
         if M.is_wand(target) then return M.is_wand_offer(offer) end
         if flask_util.is_flask(target) then return flask_util.is_flask_offer(offer) end
@@ -464,7 +461,6 @@ function M.cull_or_relink_items(altar, missing_links, linkables, on_pre_sever)
         -- figure out if the link can be restored from an item
         -- at the exact same x and y coordinates as the missing link
         for _, linkable in ipairs(linkables) do
-            --logger.log("missing link", missingLink, "possible replacement", linkable)
             if missing_link.innerId == linkable.innerId then
                 relinks[missing_link] = linkable
                 break
@@ -476,14 +472,12 @@ function M.cull_or_relink_items(altar, missing_links, linkables, on_pre_sever)
         end
     end
     for missing, found in pairs(relinks) do
-        --logger.log("relinking item", missing.item, "to item", found.item)
         local reHolder = M.relink(altar, missing.item, found.item)
         if reHolder then
             results[#results + 1] = { holder = reHolder, item = found.item, x = found.x, y = found.y }
         end
     end
     for _, cull in ipairs(culls) do
-        --logger.log("severing missing item", cull.item)
         local is_upper_altar = M.is_upper_altar(altar)
         -- restore vanilla behaviors to now-not-linked item
         M.set_linked_item_behaviors(altar, is_upper_altar, cull, nil)

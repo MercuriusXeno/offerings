@@ -48,7 +48,7 @@ end
 ---@param result string
 ---@param description_line string
 ---@return string
-function M.appendDescription(result, description_line)
+function M.append_description(result, description_line)
   if result then
     result = result .. "\n" .. description_line
   else

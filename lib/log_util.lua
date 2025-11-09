@@ -3,7 +3,7 @@ local logger = {} ---@class log_util
 logger.debug_prefix = "-== OFFERINGS_DEBUG ==-   "
 function logger.isDebug() return true end
 
-function logger.log(s)
+function logger.out(s)
     if not logger.isDebug() then return end
 
     if s == "" then return end
@@ -14,7 +14,7 @@ end
 ---of varargs inject strings in the array to do a recursive debug out
 ---@param r string[]
 ---@param ... any
-local function recursiveAbout(r, d, ...)
+local function rescursive_log(r, d, ...)
     local i = 1
     local n = select("#", ...)
     while i < n do
@@ -28,7 +28,7 @@ local function recursiveAbout(r, d, ...)
                 varargs[#varargs+1] = k
                 varargs[#varargs+1] = v
             end
-            recursiveAbout(r, d + 1, unpack(varargs))
+            rescursive_log(r, d + 1, unpack(varargs))
         else
             local s = type(a) == "string" and a or tostring(a)
             r[#r+1] = pad .. p .. " " .. s
@@ -43,8 +43,8 @@ end
 ---@param ... any
 function logger.log(...)
     local r = { }
-    recursiveAbout(r, 0, ...)
-    for _, s in ipairs(r) do logger.log(s) end
+    rescursive_log(r, 0, ...)
+    for _, s in ipairs(r) do logger.out(s) end
 end
 
 logger.stepNumber = 0
