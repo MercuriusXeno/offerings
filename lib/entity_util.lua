@@ -2,9 +2,9 @@ local comp_util = dofile_once("mods/offerings/lib/comp_util.lua") ---@type offer
 
 local M = {} ---@class offering_entity_util
 
-function M.itemNameContains(eid, s) return comp_util.hasCompLike(eid, "ItemComponent", nil, "item_name", s) end
+function M.itemNameContains(eid, s) return comp_util.has_component_of_type_with_field_like(eid, "ItemComponent", nil, "item_name", s) end
 
-function M.itemNamed(eid, name) return comp_util.has_comp_match(eid, "ItemComponent", nil, "item_name", name) end
+function M.itemNamed(eid, name) return comp_util.has_component_of_type_with_field(eid, "ItemComponent", nil, "item_name", name) end
 
 function M.entityName(eid) return EntityGetName(eid) end
 
@@ -23,7 +23,7 @@ function M.get_nearest_entity_with_tag(eid, tag) return M.closest(tag, EntityGet
 function M.setDescription(eid, description)
     if description == "" then return end
     local comp = comp_util.first_component(eid, "ItemComponent", nil)
-    comp_util.component_set(comp, "ui_description", description)
+    comp_util.set_component_value(comp, "ui_description", description)
 end
 
 return M

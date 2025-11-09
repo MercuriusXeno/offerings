@@ -98,14 +98,14 @@ function M.potionMimicValue(eid) return entity_util.itemNamed(eid, "$item_potion
 function M.ldcValue(eid)
     local itemActionComp = comp_util.first_component(eid, "ItemActionComponent", nil)
     if not itemActionComp then return 0 end
-    local actionId = comp_util.component_get(itemActionComp, "action_id")
+    local actionId = comp_util.get_component_value(itemActionComp, "action_id")
     return actionId == "LONG_DISTANCE_CAST" and 1 or 0
 end
 
 function M.storeEnchantKey(eid, key, level)
     local fullkey = enchantPrefix .. key
-    comp_util.removeMatch(eid, VSC, nil, "name", fullkey)
-    comp_util.store_int(eid, fullkey, level)
+    comp_util.remove_components_of_type_with_field(eid, VSC, nil, "name", fullkey)
+    comp_util.set_int(eid, fullkey, level)
 end
 
 local defaultPotionDmc = {
@@ -130,29 +130,29 @@ function M.makeTempered(eid, level)
     M.storeEnchantKey(eid, "tempered", level)
     --logger.log("tempered-ing", eid, "level", level)
     local pbcdc = comp_util.first_component(eid, PBCDC, nil)
-    comp_util.component_set(pbcdc, "damage_multiplier", (1 - level) * 0.016667)
+    comp_util.set_component_value(pbcdc, "damage_multiplier", (1 - level) * 0.016667)
     if level == 0 then
         EntityAddComponent2(eid, DMC, defaultPotionDmc)
     else
-        comp_util.remove_all_comps(eid, DMC, nil)
+        comp_util.remove_all_components_of_type(eid, DMC, nil)
     end
 
     local dc = comp_util.first_component(eid, DMC, nil)
-    comp_util.toggleComp(eid, dc, level == 0)
+    comp_util.toggle_component(eid, dc, level == 0)
 
     local pisc = comp_util.first_component(eid, PISC, nil)
     local temperedGlass = CellFactory_GetType("offering_tempered_glass_box2d")
-    comp_util.component_set(pisc, "material", temperedGlass)
+    comp_util.set_component_value(pisc, "material", temperedGlass)
 end
 
 function M.makeReactive(eid, level)
     M.storeEnchantKey(eid, "reactive", level)
     --logger.log("reactive-ing", eid, "level", level)
     local suckComp = comp_util.first_component(eid, MSC, nil)
-    local barrel = comp_util.component_get(suckComp, "barrel_size")
+    local barrel = comp_util.get_component_value(suckComp, "barrel_size")
     local comp = comp_util.first_component(eid, MIC, nil)
-    comp_util.component_set(comp, "do_reactions", 20 + (level * 20))
-    comp_util.component_set(comp, "reaction_speed", math.floor(barrel / 200) * (level + 1))
+    comp_util.set_component_value(comp, "do_reactions", 20 + (level * 20))
+    comp_util.set_component_value(comp, "reaction_speed", math.floor(barrel / 200) * (level + 1))
 end
 
 function M.makeTransmuting(eid, level)
@@ -164,10 +164,10 @@ end
 function M.makeInstant(eid, level)
     M.storeEnchantKey(eid, "instant", level)
     --logger.log("instant-ing", eid, "level", level)
-    local barrel_size = comp_util.valueOrDefault(eid, MSC, "barrel_size", 1000) or 1000--- @type number
+    local barrel_size = comp_util.value_or_default(eid, MSC, "barrel_size", 1000) or 1000--- @type number
     local potionComp = comp_util.first_component(eid, "PotionComponent", nil)
-    comp_util.component_set(potionComp, "throw_bunch", level == 1)
-    comp_util.component_set(potionComp, "throw_how_many", math.floor(math.pow(barrel_size, 0.8)))
+    comp_util.set_component_value(potionComp, "throw_bunch", level == 1)
+    comp_util.set_component_value(potionComp, "throw_how_many", math.floor(math.pow(barrel_size, 0.8)))
 end
 
 local drainXml = "mods/offerings/entity/draining.xml"
@@ -315,7 +315,7 @@ function M.describeFlask(combined)
 end
 
 function M.enchantLevel(eid, key)
-    return comp_util.component_get(comp_util.firstComponentMatching(eid, VSC, nil, "name", enchantPrefix .. key), "value_int") or 0
+    return comp_util.get_component_value(comp_util.first_component_of_type_with_field_equal(eid, VSC, nil, "name", enchantPrefix .. key), "value_int") or 0
 end
 
 ---Turns a collection of VSCs into a material table.
@@ -353,12 +353,12 @@ function M.holderFlaskStats(altar)
     local result = {} ---@type FlaskStats[]
     for _, holder in ipairs(holders) do
         result[#result + 1] = {
-            materials = M.materializeMaterials(comp_util.storedBoxesLike(holder, prefMat(""), "value_int", true)),
-            enchantments = M.materializeEnchants(comp_util.storedBoxesLike(holder, prefEnch(""), "value_int", true)),
+            materials = M.materializeMaterials(comp_util.get_boxes_like(holder, prefMat(""), "value_int", true)),
+            enchantments = M.materializeEnchants(comp_util.get_boxes_like(holder, prefEnch(""), "value_int", true)),
             barrel_size = { comp_util.get_int(holder, prefOg("barrel_size")) },
             num_cells_sucked_per_frame = { comp_util.get_int(holder, prefOg("num_cells_sucked_per_frame")) },
-            spray_velocity_coeff = { comp_util.storedFloat(holder, prefOg("spray_velocity_coeff")) },
-            spray_velocity_normalized_min = { comp_util.storedFloat(holder, prefOg("spray_velocity_normalized_min")) },
+            spray_velocity_coeff = { comp_util.get_float(holder, prefOg("spray_velocity_coeff")) },
+            spray_velocity_normalized_min = { comp_util.get_float(holder, prefOg("spray_velocity_normalized_min")) },
             throw_how_many = { comp_util.get_int(holder, prefOg("throw_how_many")) }
         } ---@type FlaskStats
     end
@@ -371,7 +371,7 @@ end
 function M.flaskMaterials(flask)
     if M.is_flask(flask) then
         local comp = comp_util.first_component(flask, MIC, nil)
-        return comp_util.component_get(comp, "count_per_material_type") ---@type table<integer, integer>
+        return comp_util.get_component_value(comp, "count_per_material_type") ---@type table<integer, integer>
     end
     return {} ---@type table<integer, integer>
 end
@@ -384,7 +384,7 @@ function M.store_flask_stats(eid, hid)
     if comp_util.get_int(hid, "eid") ~= eid then return end
 
     local function pushEnch(key, level)
-        if level ~= 0 then comp_util.store_int(hid, prefEnch(key), level) end
+        if level ~= 0 then comp_util.set_int(hid, prefEnch(key), level) end
     end
     if M.is_flask(eid) then
         --logger.log("adding flask to offerings")
@@ -393,20 +393,20 @@ function M.store_flask_stats(eid, hid)
         if existing then return end
 
         local materials = M.flaskMaterials(eid)
-        local function pushMat(matId, amount) if amount > 0 then comp_util.store_int(hid, prefMat(matId), amount) end end
+        local function pushMat(matId, amount) if amount > 0 then comp_util.set_int(hid, prefMat(matId), amount) end end
         for matId, amount in pairs(materials) do pushMat(matId, amount) end
         for _, def in ipairs(M.flaskEnchantDefs) do pushEnch(def.key, M.enchantLevel(eid, def.key)) end
 
         local msc = comp_util.first_component(eid, MSC, nil)
-        comp_util.store_int(hid, prefOg("num_cells_sucked_per_frame"), comp_util.component_get(msc, "num_cells_sucked_per_frame"))
-        comp_util.store_int(hid, prefOg("barrel_size"), comp_util.component_get(msc, "barrel_size"))
+        comp_util.set_int(hid, prefOg("num_cells_sucked_per_frame"), comp_util.get_component_value(msc, "num_cells_sucked_per_frame"))
+        comp_util.set_int(hid, prefOg("barrel_size"), comp_util.get_component_value(msc, "barrel_size"))
 
         local potion = comp_util.first_component(eid, "PotionComponent", nil)
-        comp_util.storeFloat(hid, prefOg("spray_velocity_coeff"), comp_util.component_get(potion, "spray_velocity_coeff"))
-        comp_util.storeFloat(hid, prefOg("spray_velocity_normalized_min"), comp_util.component_get(potion, "spray_velocity_normalized_min"))
-        comp_util.store_int(hid, prefOg("throw_how_many"), comp_util.component_get(potion, "throw_how_many"))
+        comp_util.set_float(hid, prefOg("spray_velocity_coeff"), comp_util.get_component_value(potion, "spray_velocity_coeff"))
+        comp_util.set_float(hid, prefOg("spray_velocity_normalized_min"), comp_util.get_component_value(potion, "spray_velocity_normalized_min"))
+        comp_util.set_int(hid, prefOg("throw_how_many"), comp_util.get_component_value(potion, "throw_how_many"))
     elseif M.is_flask_offer(eid) then
-        local existing = comp_util.storedBoxesLike(hid, prefEnch(""), "value_int", true)
+        local existing = comp_util.get_boxes_like(hid, prefEnch(""), "value_int", true)
         --logger.log("adding enchantment to offerings", eid, "existing enchants", existing)
         if #existing > 0 then return end
 
@@ -546,15 +546,15 @@ function M.set_flask_results(flask, combined)
     entity_util.setDescription(flask, M.describeFlask(combined))
 
     local msc = comp_util.first_component(flask, MSC, nil)
-    comp_util.component_set(msc, "barrel_size", combined.barrel_size[1])
-    comp_util.component_set(msc, "num_cells_sucked_per_frame", combined.num_cells_sucked_per_frame[1])
+    comp_util.set_component_value(msc, "barrel_size", combined.barrel_size[1])
+    comp_util.set_component_value(msc, "num_cells_sucked_per_frame", combined.num_cells_sucked_per_frame[1])
 
     local potion = comp_util.first_component(flask, "PotionComponent", nil)
-    comp_util.component_set(potion, "spray_velocity_coeff", combined.spray_velocity_coeff[1])
-    comp_util.component_set(potion, "spray_velocity_normalized_min", combined.spray_velocity_normalized_min[1])
-    comp_util.component_set(potion, "throw_how_many", combined.throw_how_many[1])
-    comp_util.component_set(potion, "dont_spray_just_leak_gas_materials", false)
-    comp_util.component_set(potion, "throw_bunch", false)
+    comp_util.set_component_value(potion, "spray_velocity_coeff", combined.spray_velocity_coeff[1])
+    comp_util.set_component_value(potion, "spray_velocity_normalized_min", combined.spray_velocity_normalized_min[1])
+    comp_util.set_component_value(potion, "throw_how_many", combined.throw_how_many[1])
+    comp_util.set_component_value(potion, "dont_spray_just_leak_gas_materials", false)
+    comp_util.set_component_value(potion, "throw_bunch", false)
 
     for _, def in ipairs(M.flaskEnchantDefs) do
         local level = combined.enchantments[def.key] or 0

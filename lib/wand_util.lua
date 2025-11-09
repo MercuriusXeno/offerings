@@ -69,9 +69,9 @@ local wand_util = {} ---@class wand_util:{[wand_stat_key]: wand_stat_def}
 function stat_def_mt:pull(abilityComp)
     local result = 0
     if self.cObj then
-        result = comp_util.component_object_get(abilityComp, self.cObj, self.key)
+        result = comp_util.get_component_object_value(abilityComp, self.cObj, self.key)
     else
-        result = comp_util.component_get(abilityComp, self.key)
+        result = comp_util.get_component_value(abilityComp, self.key)
     end
     if type(result) == "boolean" then
         if result then result = 1 else result = 0 end
@@ -86,9 +86,9 @@ function stat_def_mt:push(abilityComp, amount)
     local value = amount ---@type number|boolean
     if self.key == key_map.shuffle_deck_when_empty then value = (value == 1) end
     if self.cObj then
-        comp_util.component_object_set(abilityComp, self.cObj, self.key, value)
+        comp_util.set_component_object_value(abilityComp, self.cObj, self.key, value)
     else
-        comp_util.component_set(abilityComp, self.key, value)
+        comp_util.set_component_value(abilityComp, self.key, value)
     end
 end
 
@@ -325,11 +325,7 @@ end
 function wand_util:store_wand_stats_in_holder(eid, hid)
     -- if the holder doesn't align DO NOT overwrite its stats
     if comp_util.get_int(hid, "eid") ~= eid then return end
-    local ability = comp_util.first_component(hid, "AbilityComponent", nil)
-    -- if the holder already has a stat block ALSO don't overwrite it.
-    if not ability then
-        EntityAddComponent2(hid, "AbilityComponent", {}) -- create empty ability component
-    end
+    local ability = comp_util.get_or_create_comp(hid, "AbilityComponent", nil)
     local stats = self:convert_to_wand_stats(eid)
     -- set the empty ability component stats to be stored ones
     self:set_wand_result(hid, stats)

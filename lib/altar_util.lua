@@ -317,8 +317,8 @@ function M.relink(altar, missing, relinkTo)
     local result = nil
     for _, hid in ipairs(holders) do
         if comp_util.get_int(hid, "eid") == missing then
-            comp_util.removeMatch(hid, VSC, nil, "name", "eid")
-            comp_util.store_int(hid, "eid", relinkTo)
+            comp_util.remove_components_of_type_with_field(hid, VSC, nil, "name", "eid")
+            comp_util.set_int(hid, "eid", relinkTo)
             result = hid
             break
         end
@@ -345,8 +345,8 @@ function M.sever(altar, eid, is_pickup)
         if comp_util.get_int(hid, "eid") == eid then hidToRemove = hid end
     end
     if hidToRemove ~= 0 then
-        comp_util.remove_all_comps(hidToRemove, VSC, nil)
-        comp_util.remove_all_comps(hidToRemove, "AbilityComponent", nil)
+        comp_util.remove_all_components_of_type(hidToRemove, VSC, nil)
+        comp_util.remove_all_components_of_type(hidToRemove, "AbilityComponent", nil)
         EntityKill(hidToRemove)
     end
     if is_pickup then return end
@@ -392,11 +392,11 @@ end
 function M.make_holder(altar, seen, innerId)
     -- create a holder for the item and add it to the altar
     local e = EntityLoad("mods/offerings/entity/holder.xml", seen.x, seen.y)
-    comp_util.store_int(e, "eid", seen.item)
+    comp_util.set_int(e, "eid", seen.item)
     -- reverse lookup thing here, link them to the same id so they know about eachother through a
     -- persistent id. we can't rely on the entity_id but we can persist our own.
-    comp_util.store_int(e, "innerId", innerId)
-    comp_util.store_int(seen.item, "innerId", innerId)
+    comp_util.set_int(e, "innerId", innerId)
+    comp_util.set_int(seen.item, "innerId", innerId)
     EntityAddChild(altar, e)
     return e
 end
@@ -421,25 +421,25 @@ function M.set_linked_item_behaviors(altar, is_upper_altar, seen, hid)
         seen.x = dx
         seen.y = dy
         if hid then EntitySetTransform(hid, dx, dy, vertically_rotated) end
-        comp_util.each_component_set(seen.item, IC, nil, "spawn_pos", dx, dy)
+        comp_util.set_each_component_type_field(seen.item, IC, nil, "spawn_pos", dx, dy)
     end
 
     -- make "first time pickup" fanfare when picking the item up
-    comp_util.each_component_set(seen.item, IC, nil, "has_been_picked_by_player", not is_holder_linked)
+    comp_util.set_each_component_type_field(seen.item, IC, nil, "has_been_picked_by_player", not is_holder_linked)
 
     if M.is_wand(seen.item) then
         -- immobilize wands
-        comp_util.each_component_set(seen.item, IC, nil, "play_hover_animation", not is_holder_linked)
-        comp_util.each_component_set(seen.item, IC, nil, "play_spinning_animation", not is_holder_linked)
-        comp_util.toggle_comps(seen.item, SPC, nil, not is_holder_linked)
+        comp_util.set_each_component_type_field(seen.item, IC, nil, "play_hover_animation", not is_holder_linked)
+        comp_util.set_each_component_type_field(seen.item, IC, nil, "play_spinning_animation", not is_holder_linked)
+        comp_util.toggle_components_by_type_and_tag(seen.item, SPC, nil, not is_holder_linked)
     else
-        comp_util.toggle_comps(seen.item, "VelocityComponent", nil, not is_holder_linked)
+        comp_util.toggle_components_by_type_and_tag(seen.item, "VelocityComponent", nil, not is_holder_linked)
     end
 
     -- re-enables the first time pickup particles, which are fancy
     if is_upper_altar then
         local pickup = M.is_wand(seen.item) and wand_pickup_sript or flask_pickup_script
-        if is_holder_linked and not comp_util.has_comp_match(seen.item, LC, nil, pickup_lua, pickup[pickup_lua]) then
+        if is_holder_linked and not comp_util.has_component_of_type_with_field(seen.item, LC, nil, pickup_lua, pickup[pickup_lua]) then
             EntityAddComponent2(seen.item, LC, pickup)
         else
             comp_util.toggle_first_comp_matching(seen.item, LC, nil, pickup_lua, pickup[pickup_lua], is_holder_linked)
@@ -447,7 +447,7 @@ function M.set_linked_item_behaviors(altar, is_upper_altar, seen, hid)
     end
 
     -- enable particle emitters on linked items, these are the "new item" particles
-    comp_util.each_component_set(seen.item, SPEC, nil, "velocity_always_away_from_center", is_holder_linked)
+    comp_util.set_each_component_type_field(seen.item, SPEC, nil, "velocity_always_away_from_center", is_holder_linked)
 end
 
 ---Removes any existing links that have been severed by non-existence or removal.
@@ -511,7 +511,7 @@ function M.do_altar_update_tick(altar, is_upper_altar, link_function, pre_sever_
     -- floaty particle stuff and a light when player is near
     local is_player_near = #EntityGetInRadiusWithTag(x, y, 120, "player_unit") > 0
     comp_util.toggle_first_comp_matching(altar, PEC, nil, "gravity", { 0, -10 }, is_player_near)
-    comp_util.toggle_comps(altar, "LightComponent", nil, is_player_near)
+    comp_util.toggle_components_by_type_and_tag(altar, "LightComponent", nil, is_player_near)
     local has_any_link = false
     if is_player_near then
         -- search for linkables, including already linked items

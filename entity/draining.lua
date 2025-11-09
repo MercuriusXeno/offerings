@@ -34,17 +34,17 @@ local function getDrainParams(d, dx, dy)
     local inventory = comp_util.first_component(player, "Inventory2Component")
     if not inventory then return result end
 
-    result.heldItem = comp_util.component_get(inventory, "mActiveItem")
+    result.heldItem = comp_util.get_component_value(inventory, "mActiveItem")
     if not result.heldItem then return result end
-    local enchantVsc = comp_util.firstComponentMatching(result.heldItem, "VariableStorageComponent",
+    local enchantVsc = comp_util.first_component_of_type_with_field_equal(result.heldItem, "VariableStorageComponent",
         nil, "name", "offering_flask_enchant_draining")
     if not enchantVsc or comp_util.get_int(result.heldItem, "offering_flask_enchant_draining") == 0 then return result end
 
     local parentMsc = comp_util.first_component(result.heldItem, "MaterialSuckerComponent", nil)
     if not parentMsc then return result end
 
-    local barrel = comp_util.component_get(parentMsc, "barrel_size")
-    local amount = comp_util.component_get(parentMsc, "mAmountUsed")
+    local barrel = comp_util.get_component_value(parentMsc, "barrel_size")
+    local amount = comp_util.get_component_value(parentMsc, "mAmountUsed")
     result.space = barrel - amount
 
     result.isActive = true
@@ -53,14 +53,14 @@ end
 
 local drainParams = getDrainParams(eid, x, y)
 --logger.log("drain params", drainParams)
-comp_util.toggleComp(eid, drainParams.msc, drainParams.isActive)
+comp_util.toggle_component(eid, drainParams.msc, drainParams.isActive)
 -- don't do anything else, just turn the comp off and exit.
 if not drainParams.isActive then return end
-comp_util.component_set(drainParams.msc, "barrel_size", drainParams.space)
+comp_util.set_component_value(drainParams.msc, "barrel_size", drainParams.space)
 local mic = comp_util.first_component(eid, "MaterialInventoryComponent", nil)
 local parentMic = comp_util.first_component(drainParams.heldItem, "MaterialInventoryComponent", nil)
-local ourMaterials = comp_util.component_get(mic, "count_per_material_type") ---@type table<integer, integer>
-local parentMaterials = comp_util.component_get(parentMic, "count_per_material_type") ---@type table<integer, integer>
+local ourMaterials = comp_util.get_component_value(mic, "count_per_material_type") ---@type table<integer, integer>
+local parentMaterials = comp_util.get_component_value(parentMic, "count_per_material_type") ---@type table<integer, integer>
 for k, m in pairs(ourMaterials) do
     local matId = k - 1
     if m > 0 then
