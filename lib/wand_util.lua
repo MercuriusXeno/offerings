@@ -158,7 +158,10 @@ function stat_def_mt:area_under_curve_of_steps(signed_steps)
     local sign = (signed_steps < 0) and -1 or 1
     local steps = signed_steps * sign
     local linear_growth = 1.0 - 0.5 * adjusted_growth
-    return (linear_growth * steps + 0.5 * adjusted_growth * steps * steps) * sign
+    local result = (linear_growth * steps + 0.5 * adjusted_growth * steps * steps)
+    --- diminish the impact of negative results slightly
+    if (sign < 0) then result = math.pow(result, 0.9) end
+    return result * sign
 end
 
 function stat_def_mt:area_under_curve_of_value(value)
@@ -280,7 +283,7 @@ function wand_util:merge_wand_stats(stats, offerings)
         --overflow = overflow + (worth - def:worth_from_value(result))
         local overflow = 0 -- just ignore this
         local log_result_stat_line = "total " ..
-        pretty(worth) .. " worth -> " .. pretty(result) .. ", waste " .. pretty(overflow)
+            pretty(worth) .. " worth -> " .. pretty(result) .. ", waste " .. pretty(overflow)
         logger.about("to ", log_result_stat_line)
         stats[key] = result
     end
@@ -366,13 +369,13 @@ local cfgs = {
 local stat_configs = {
     gun_level = {
         name = "gun_level",
-        min = 0,
-        max = 30,
-        base = 0,
+        min = 1,
+        max = 15,
+        base = 1,
         inverted = false,
         delta = 1.0,
-        growth = 3.0,
-        perfect = 20,
+        growth = 10.0,
+        perfect = 15,
         total_cost_of_perfection = 30000,
     },
     actions_per_round = {
@@ -382,7 +385,7 @@ local stat_configs = {
         base = 1,
         inverted = false,
         delta = 1.0,
-        growth = 2.5,
+        growth = 2.0,
         perfect = 26,
         total_cost_of_perfection = 16000,
     },
@@ -393,7 +396,7 @@ local stat_configs = {
         base = 1,
         inverted = false,
         delta = 1.0,
-        growth = 2.5,
+        growth = 2.0,
         perfect = 26,
         total_cost_of_perfection = 16000.0,
     },
@@ -415,7 +418,7 @@ local stat_configs = {
         base = 30.0,
         inverted = true,
         delta = 1.0,
-        growth = 2.0,
+        growth = 1.4,
         perfect = -240.0,
         total_cost_of_perfection = 12000.0
     },
@@ -426,7 +429,7 @@ local stat_configs = {
         base = 0.9,
         inverted = false,
         delta = 0.01,
-        growth = 2.0,
+        growth = 1.8,
         perfect = 10.0,
         total_cost_of_perfection = 18400.0
     },
@@ -437,7 +440,7 @@ local stat_configs = {
         base = 8.0,
         inverted = true,
         delta = 1.0,
-        growth = 2.0,
+        growth = 1.6,
         perfect = -1440.0,
         total_cost_of_perfection = 10960.0
     },
@@ -448,7 +451,7 @@ local stat_configs = {
         base = 8.0,
         inverted = true,
         delta = 1.0,
-        growth = 2.0,
+        growth = 1.4,
         perfect = -240.0,
         total_cost_of_perfection = 10240.0
     },
@@ -459,7 +462,7 @@ local stat_configs = {
         base = 0,
         inverted = false,
         delta = 1.0,
-        growth = 1 + 1e-7,
+        growth = 1.0025,
         perfect = 1e9,
         total_cost_of_perfection = 1e10
     },
@@ -470,20 +473,9 @@ local stat_configs = {
         base = 0,
         inverted = false,
         delta = 1.0,
-        growth = 1 + 1e-7,
+        growth = 1.005,
         perfect = 1e9,
         total_cost_of_perfection = 1e10
-    },
-    cost = {
-        name = "cost",
-        min = -1e9,
-        max = 1e9,
-        base = 0,
-        inverted = false,
-        delta = 1.0,
-        growth = 1.0,
-        perfect = 1e9,
-        total_cost_of_perfection = 1e9
     },
 }
 
@@ -514,7 +506,6 @@ function wand_util:makeDef(key, cObj)
         total_perfection_cost = stat_math.total_cost_of_perfection,
     })
     result.base_cost = result:solve_base_cost()
-    logger.about("making wand stat math entry", result)
     return result
 end
 
@@ -526,9 +517,7 @@ wand_util:makeDef(keys.reload_time, cfgs.gun)
 wand_util:makeDef(keys.speed_multiplier, cfgs.card)
 wand_util:makeDef(keys.spread_degrees, cfgs.card)
 wand_util:makeDef(keys.fire_rate_wait, cfgs.card)
--- whatever is left in overflow goes to increasing tier by a max of 1, if possible
 wand_util:makeDef(keys.gun_level)
--- mana and charge speed divide whatever remains
 wand_util:makeDef(keys.mana_max)
 wand_util:makeDef(keys.mana_charge_speed)
 

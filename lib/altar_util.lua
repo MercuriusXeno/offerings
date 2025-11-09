@@ -232,7 +232,7 @@ local function targetOfAltar(altar)
     return nil
 end
 
-local function forceUpdates(altar, eid, isResetting)
+local function forceUpdates(altar, eid)
     --logger.about("forcing update from altar", altar, "from id severance", eid)
     -- ALWAYS recalc after a severance.
     local upperAltar = upperAltarNear(altar)
@@ -240,18 +240,12 @@ local function forceUpdates(altar, eid, isResetting)
     local target = targetOfAltar(upperAltar)
     if target == nil then return false end
     if isWand(eid) then
-        local combinedWands = nil
-        if not isResetting then
-            combinedWands = wand_util:gather_altar_wand_stats_and_merge(upperAltar, lowerAltar)
-        end
+        local combinedWands =  wand_util:gather_altar_wand_stats_and_merge(upperAltar, lowerAltar)
         logger.about("combined stats after severance recalc", combinedWands)
         wand_util:set_wand_result(target.item, combinedWands)
     end
     if flask_util.isFlask(eid) then
-        local combinedFlasks = nil
-        if not isResetting then
-            combinedFlasks = flask_util.mergeFlaskStats(upperAltar, lowerAltar)
-        end
+        local combinedFlasks = flask_util.mergeFlaskStats(upperAltar, lowerAltar)
         flask_util.setFlaskResult(target.item, combinedFlasks)
     end
 end
@@ -507,13 +501,11 @@ function M.targetLinkFunc(upperAltar, seen, linkedCount)
     -- handle adding or removing item from the altar children
     local holder = makeHolderLink(upperAltar, seen, linkedCount + 1)
     setLinkedItemBehaviors(upperAltar, true, seen, holder)
-    --logger.about("holder", holder, "holder wand", seen.item)
     if isWand(seen.item) then
         if holder then wand_util:store_wand_stats_in_holder(seen.item, holder) end
         local combinedWands = wand_util:gather_altar_wand_stats_and_merge(upperAltar, lowerAltarNear(upperAltar))
         wand_util:set_wand_result(seen.item, combinedWands)
     elseif flask_util.isFlask(seen.item) then
-        --logger.about("holder", holder, "holder flask", eid)
         if holder then flask_util.storeFlaskStats(seen.item, holder) end
         local combinedFlasks = flask_util.mergeFlaskStats(upperAltar, lowerAltarNear(upperAltar))
         flask_util.setFlaskResult(seen.item, combinedFlasks)
@@ -557,7 +549,6 @@ function M.offerSever(altar, seenItem) end
 ---@param altar entity_id The target altar restoring the item
 ---@param seenItem SeenItem The item id being restored
 function M.targetSever(altar, seenItem)
-    --logger.about("restoring item ", seenItem)
     if isWand(seenItem.item) then
         local combinedWands = wand_util:gather_altar_wand_stats_and_merge(altar, nil)
         wand_util:set_wand_result(seenItem.item, combinedWands)
