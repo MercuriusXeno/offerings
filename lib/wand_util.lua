@@ -303,7 +303,8 @@ end
 function wand_util:set_holder_wand_stats(eid, hid)
     -- if the holder doesn't align DO NOT overwrite its stats
     if comp_util.get_int(hid, "eid") ~= eid then return end
-    local ability = comp_util.get_or_create_comp(hid, "AbilityComponent", nil)
+    -- we don't care to do anything with it, just ensure it exists
+    local _ = comp_util.get_or_create_comp(hid, "AbilityComponent", nil)
     local stats = self:convert_to_wand_stats(eid)
     -- set the empty ability component stats to be stored ones
     self:set_wand_result(hid, stats)

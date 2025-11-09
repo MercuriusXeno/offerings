@@ -221,16 +221,69 @@ function M.get_boxes_like(eid, name, specificField, isSkippingZero)
   return vscs
 end
 
+---Set the value_int of a vsc whose name matches the name provided in a given entity
+---@param eid entity_id the entity with the vsc we're modifying
+---@param name string the name of the vsc we want to set the value of
+---@param val integer the value of the field we're supplying to the vsc
 function M.set_int(eid, name, val) M.store(eid, name, "value_int", val) end
 
+---Set the value_int [cast as entity] of a vsc whose name matches the name provided in a given entity
+---@param eid entity_id the entity with the vsc we're modifying
+---@param name string the name of the vsc we want to set the value of
+---@param val entity_id the value of the field we're supplying to the vsc
+function M.set_entity_id(eid, name, val) M.store(eid, name, "value_int", val) end
+
+---Set the value_float of a vsc whose name matches the name provided in a given entity
+---@param eid entity_id the entity with the vsc we're modifying
+---@param name string the name of the vsc we want to set the value of
+---@param val number the value of the field we're supplying to the vsc
 function M.set_float(eid, name, val) M.store(eid, name, "value_float", val) end
 
-function M.get_int(eid, name) return M.get_first_value(eid, name, "value_int") end ---@return integer
+---Set the value_string of a vsc whose name matches the name provided in a given entity
+---@param eid entity_id the entity with the vsc we're modifying
+---@param name string the name of the vsc we want to set the value of
+---@param val string the value of the field we're supplying to the vsc
+function M.set_string(eid, name, val) M.store(eid, name, "value_string", val) end
 
-function M.get_entity_id(eid, name) return M.get_first_value(eid, name, "value_int") end ---@return entity_id
+---Get the value-field of a vsc whose name matches the name provided in a given entity
+---@param eid entity_id the entity with the vsc we're probing
+---@param name string the name of the vsc we want to get the value of
+---@return integer result the value of the field we're getting from the vsc
+function M.get_int(eid, name)
+  return M.get_first_value(eid, name, "value_int") ---@return integer
+end
 
-function M.get_float(eid, name) return M.get_first_value(eid, name, "value_float") end ---@return number
+---Get the value-field of a vsc whose name matches the name provided in a given entity
+---@param eid entity_id the entity with the vsc we're probing
+---@param name string the name of the vsc we want to get the value of
+---@return entity_id result the value of the field we're getting from the vsc
+function M.get_entity_id(eid, name)
+  return M.get_first_value(eid, name, "value_int") ---@return entity_id
+end
 
+---Get the value-field of a vsc whose name matches the name provided in a given entity
+---@param eid entity_id the entity with the vsc we're probing
+---@param name string the name of the vsc we want to get the value of
+---@return number result the value of the field we're getting from the vsc
+function M.get_float(eid, name)
+  return M.get_first_value(eid, name, "value_float") ---@return number
+end
+
+---Get the value-field of a vsc whose name matches the name provided in a given entity
+---@param eid entity_id the entity with the vsc we're probing
+---@param name string the name of the vsc we want to get the value of
+---@return string result the value of the field we're getting from the vsc
+function M.get_string(eid, name)
+  return M.get_first_value(eid, name, "value_string") ---@return string
+end
+
+---Returns the value of a field from a component on a given entity, or
+---substitute a default value (from arguments) if nothing is found.
+---@param eid entity_id
+---@param ctype string
+---@param field string
+---@param default any
+---@return any
 function M.value_or_default(eid, ctype, field, default)
   local comp = EntityGetFirstComponentIncludingDisabled(eid, ctype)
   if comp then return ComponentGetValue2(comp, field) end
