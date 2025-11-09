@@ -54,11 +54,11 @@ function M.get_component_value(comp, field)
 end
 
 ---Set the value of a component field, can take table arguments
----@param comp component_id
+---@param comp? component_id
 ---@param field string
 ---@param ... any|table
 function M.set_component_value(comp, field, ...)
-  ComponentSetValue2(comp, field, ...)
+  if comp then ComponentSetValue2(comp, field, ...) end
 end
 
 ---Return the object property defined in a comp that is nested in an object

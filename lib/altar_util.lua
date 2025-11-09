@@ -307,16 +307,16 @@ end
 ---we naively assume that is the entity "from before".
 ---@param altar entity_id The altar of the item that was severed.
 ---@param missing entity_id The item that was severed
----@param relinkTo entity_id The item that is in the same x/y
+---@param relink_to entity_id The item that is in the same x/y
 ---@return entity_id|nil hid The new holder Id the relink is tied to
-function M.relink(altar, missing, relinkTo)
+function M.relink(altar, missing, relink_to)
     -- if this is the upper altar
     local holders = EntityGetAllChildren(altar) or {}
     local result = nil
     for _, hid in ipairs(holders) do
         if comp_util.get_int(hid, "eid") == missing then
             comp_util.remove_components_of_type_with_field(hid, VSC, nil, "name", "eid")
-            comp_util.set_int(hid, "eid", relinkTo)
+            comp_util.set_entity_id(hid, "eid", relink_to)
             result = hid
             break
         end
@@ -384,16 +384,16 @@ end
 ---it represents. This is used to attach components holding its stats.
 ---@param altar entity_id
 ---@param seen SeenItem
----@param innerId integer the number of items on the altar + 1, lets us create links explicitly
+---@param inner_id integer the number of items on the altar + 1, lets us create links explicitly
 ---@return entity_id
-function M.make_holder(altar, seen, innerId)
+function M.make_holder(altar, seen, inner_id)
     -- create a holder for the item and add it to the altar
     local e = EntityLoad("mods/offerings/entity/holder.xml", seen.x, seen.y)
-    comp_util.set_int(e, "eid", seen.item)
+    comp_util.set_entity_id(e, "eid", seen.item)
     -- reverse lookup thing here, link them to the same id so they know about eachother through a
     -- persistent id. we can't rely on the entity_id but we can persist our own.
-    comp_util.set_int(e, "innerId", innerId)
-    comp_util.set_int(seen.item, "innerId", innerId)
+    comp_util.set_int(e, "innerId", inner_id)
+    comp_util.set_int(seen.item, "innerId", inner_id)
     EntityAddChild(altar, e)
     return e
 end
