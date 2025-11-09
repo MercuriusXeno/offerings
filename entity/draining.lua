@@ -1,7 +1,7 @@
 local comp_util = dofile_once("mods/offerings/lib/comp_util.lua") ---@type offering_component_util
 local logger = dofile_once("mods/offerings/lib/log_util.lua") ---@type log_util
 
---logger.about("draining lua firing")
+--logger.log("draining lua firing")
 local eid = GetUpdatedEntityID()
 local x, y = DEBUG_GetMouseWorld()
 EntitySetTransform(eid, x, y)
@@ -52,7 +52,7 @@ local function getDrainParams(d, dx, dy)
 end
 
 local drainParams = getDrainParams(eid, x, y)
---logger.about("drain params", drainParams)
+--logger.log("drain params", drainParams)
 comp_util.toggleComp(eid, drainParams.msc, drainParams.isActive)
 -- don't do anything else, just turn the comp off and exit.
 if not drainParams.isActive then return end
@@ -69,7 +69,7 @@ for k, m in pairs(ourMaterials) do
             amount = amount + parentMaterials[k]
         end
         local material = CellFactory_GetName(matId)
-        --logger.about("transferring material", material, "amount", amount, "from", eid, "to", drainParams.heldItem)
+        --logger.log("transferring material", material, "amount", amount, "from", eid, "to", drainParams.heldItem)
         AddMaterialInventoryMaterial(drainParams.heldItem, material, amount)
         RemoveMaterialInventoryMaterial(eid, material)
     end

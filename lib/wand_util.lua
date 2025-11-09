@@ -14,7 +14,7 @@ local logger = dofile_once("mods/offerings/lib/log_util.lua") ---@type log_util
 ---| "mana_max"
 ---| "gun_level"
 
-local keys = {
+local key_map = {
     actions_per_round = "actions_per_round",
     reload_time = "reload_time",
     deck_capacity = "deck_capacity",
@@ -27,17 +27,17 @@ local keys = {
     gun_level = "gun_level"
 } ---@type {[string]: wand_stat_key}
 
-local iKeys = {
-    keys.gun_level,
-    keys.mana_max,
-    keys.mana_charge_speed,
-    keys.deck_capacity,
-    keys.actions_per_round,
-    keys.reload_time,
-    keys.fire_rate_wait,
-    keys.spread_degrees,
-    keys.speed_multiplier,
-    keys.shuffle_deck_when_empty
+local key_array = {
+    key_map.gun_level,
+    key_map.mana_max,
+    key_map.mana_charge_speed,
+    key_map.deck_capacity,
+    key_map.actions_per_round,
+    key_map.reload_time,
+    key_map.fire_rate_wait,
+    key_map.spread_degrees,
+    key_map.speed_multiplier,
+    key_map.shuffle_deck_when_empty
 } ---@type wand_stat_key[]
 
 ---@class bounds
@@ -84,7 +84,7 @@ end
 ---@param amount number the amount to set the value of the comp field to
 function stat_def_mt:push(abilityComp, amount)
     local value = amount ---@type number|boolean
-    if self.key == keys.shuffle_deck_when_empty then value = (value == 1) end
+    if self.key == key_map.shuffle_deck_when_empty then value = (value == 1) end
     if self.cObj then
         comp_util.component_object_set(abilityComp, self.cObj, self.key, value)
     else
@@ -100,7 +100,7 @@ function wand_util:set_wand_result(wand, wandStats)
     if not wandStats then return end
     local ability = comp_util.first_component(wand, "AbilityComponent", nil)
     if not ability then return end
-    for _, key in ipairs(iKeys) do
+    for _, key in ipairs(key_array) do
         local d = self[key]
         d:push(ability, wandStats[key])
     end
@@ -108,10 +108,10 @@ end
 
 ---Returns an empty wand stat table to work on
 ---@return wand_stats
-function wand_util:newStats()
+function wand_util:make_stats()
     local stats = {} ---@type wand_stats
-    for _, k in ipairs(iKeys) do
-        -- logger.about("building util key", k, "with wand util", self);
+    for _, k in ipairs(key_array) do
+        -- logger.log("building util key", k, "with wand util", self);
         local d = self[k]
         stats[k] = d.base
     end
@@ -123,16 +123,16 @@ end
 ---@return wand_stats
 function wand_util:convert_to_wand_stats(eid)
     local comp = comp_util.first_component(eid, "AbilityComponent", nil)
-    local result = self:newStats()
+    local result = self:make_stats()
     if not comp then return result end
-    for _, key in ipairs(iKeys) do
+    for _, key in ipairs(key_array) do
         local def = self[key]
-        --logger.about("wand stat def", def)
+        --logger.log("wand stat def", def)
         local value = def:pull(comp)
         if type(value) == "boolean" then value = value and 1 or 0 end
         result[key] = value
     end
-    --logger.about("wand stats of scraped", result, "from entity", eid)
+    --logger.log("wand stats of scraped", result, "from entity", eid)
     return result
 end
 
@@ -195,9 +195,7 @@ end
 ---Turns a number with decimal precision into a string truncated to 2 decimal places at most.
 ---@param n number some number
 ---@return string the cleaned up number
-local function pretty(n)
-    return tostring(math.floor(n * 100) / 100)
-end
+local function pretty(n) return tostring(math.floor(n * 100) / 100) end
 
 function stat_def_mt:value_from_worth(worth)
     local adjusted_growth = self.growth - 1.0
@@ -210,7 +208,7 @@ function stat_def_mt:value_from_worth(worth)
         local distance = steps_from_base * self.step_size
         local direction_flip = (self.inverted == (worth < 0)) and 1 or -1
         local unclamped_result = self.base + direction_flip * distance
-        logger.debugOut("  linear worth of " .. self.key .. " x" .. pretty(worth) .. ": " .. pretty(distance))
+        logger.log("  linear worth of " .. self.key .. " x" .. pretty(worth) .. ": " .. pretty(distance))
         result = self:clamp(unclamped_result)
     else
         local unsigned_worth = math.abs(worth)
@@ -221,10 +219,10 @@ function stat_def_mt:value_from_worth(worth)
         local distance = steps_from_base * self.step_size
         local direction_flip = (self.inverted == (worth < 0)) and 1 or -1
         local unclamped_result = self.base + direction_flip * distance
-        logger.debugOut("  quadratic worth of " .. self.key .. " x" .. pretty(worth) .. ": " .. pretty(distance))
+        logger.log("  quadratic worth of " .. self.key .. " x" .. pretty(worth) .. ": " .. pretty(distance))
         result = self:clamp(unclamped_result)
     end
-    logger.debugOut("  -> " .. pretty(result))
+    logger.log("  -> " .. pretty(result))
     return result
 end
 
@@ -242,7 +240,7 @@ function stat_def_mt:new(t)
     assert(t.total_perfection_cost ~= nil, "Wand stat definition needs cost")
     assert(t.inverted ~= nil, "Wand stat definition needs inverted")
 
-    local statDef = {
+    local stat_definition = {
         key = t.key,
         cObj = t.cObj,
         min = t.min,
@@ -254,27 +252,27 @@ function stat_def_mt:new(t)
         perfect = t.perfect,
         total_perfection_cost = t.total_perfection_cost,
     } ---@type wand_stat_def
-    setmetatable(statDef, stat_def_mt)
-    wand_util[statDef.key] = statDef
-    return statDef
+    setmetatable(stat_definition, stat_def_mt)
+    wand_util[stat_definition.key] = stat_definition
+    return stat_definition
 end
 
 ---Scrape the stats out of a wand or holder's ability component(s)
 ---@param stats wand_stats an existing wandstats
 ---@param offerings wand_stats[] All wands stats as an array of stats holders.
 ---@return wand_stats
-function wand_util:merge_wand_stats(stats, offerings)
+function wand_util:collapse_stat_sums(stats, offerings)
     --local overflow = 0 -- for overflow or paying taxes
-    logger.debugOut("merging stats of wands")
-    for _, key in ipairs(iKeys) do
+    logger.log("merging stats of wands")
+    for _, key in ipairs(key_array) do
         local def = self[key]
         local was = stats[key]
         local worth = def:worth_from_value(was)
         local log_base_stat_line = "key " .. key .. " was " .. pretty(was) .. " worth " .. pretty(worth)
-        logger.about("from ", log_base_stat_line)
+        logger.log("from ", log_base_stat_line)
         for i, offer in ipairs(offerings) do
             local offering_worth = def:worth_from_value(offer[key])
-            logger.about("  offering " .. tostring(i), pretty(offer[key]) .. " worth " .. pretty(offering_worth))
+            logger.log("  offering " .. tostring(i), pretty(offer[key]) .. " worth " .. pretty(offering_worth))
             worth = worth + offering_worth
         end
         local result = def:value_from_worth(worth)
@@ -284,10 +282,10 @@ function wand_util:merge_wand_stats(stats, offerings)
         local overflow = 0 -- just ignore this
         local log_result_stat_line = "total " ..
             pretty(worth) .. " worth -> " .. pretty(result) .. ", waste " .. pretty(overflow)
-        logger.about("to ", log_result_stat_line)
+        logger.log("to ", log_result_stat_line)
         stats[key] = result
     end
-    -- logger.about("injected wand result", stats, "overflowing cost", overflow)
+    -- logger.log("injected wand result", stats, "overflowing cost", overflow)
     return stats
 end
 
@@ -308,20 +306,16 @@ end
 ---This can be used to restore the target item to its original values
 ---by passing a 0 for the lower altar, which causes no lower items to
 ---be factored in the formula. The result will be a combined WandStats
----@param upperAltar entity_id
----@param lowerAltar entity_id|nil
+---@param upper_altar entity_id
+---@param lower_altar entity_id|nil
 ---@return wand_stats|nil
-function wand_util:gather_altar_wand_stats_and_merge(upperAltar, lowerAltar)
-    local upperWandStats = self:holder_wand_stats_from_altar(upperAltar)
-    -- logger.about("upper altar wand holder stats", upperWandStats)
-    if #upperWandStats == 0 then return nil end
-    if not lowerAltar then return upperWandStats[1] end
+function wand_util:merge_wand_stats(upper_altar, lower_altar)
+    local upper_wand_stats = self:holder_wand_stats_from_altar(upper_altar)
+    if #upper_wand_stats == 0 then return nil end
+    if not lower_altar then return upper_wand_stats[1] end
 
-    local offerings = self:holder_wand_stats_from_altar(lowerAltar)
-    -- logger.about("lower altar (offerings) wand holder stats", offerings)
-    local blended = self:merge_wand_stats(upperWandStats[1], offerings)
-    -- logger.about("results after blend", upperWandStats[1], "offerings before blend", offerings)
-
+    local offerings = self:holder_wand_stats_from_altar(lower_altar)
+    local blended = self:collapse_stat_sums(upper_wand_stats[1], offerings)
     return blended
 end
 
@@ -329,16 +323,13 @@ end
 ---@param eid entity_id the wand being added to the altar
 ---@param hid entity_id the holder of the wand representative
 function wand_util:store_wand_stats_in_holder(eid, hid)
-    -- logger.about("storing wand stats of", eid, "on holder", hid)
     -- if the holder doesn't align DO NOT overwrite its stats
     if comp_util.get_int(hid, "eid") ~= eid then return end
     local ability = comp_util.first_component(hid, "AbilityComponent", nil)
-    -- logger.about("holder ability component exists?", ability ~= nil, "ability", ability)
     -- if the holder already has a stat block ALSO don't overwrite it.
     if not ability then
         EntityAddComponent2(hid, "AbilityComponent", {}) -- create empty ability component
     end
-    --logger.about("storing wand stats from", eid, "on holder", hid)
     local stats = self:convert_to_wand_stats(eid)
     -- set the empty ability component stats to be stored ones
     self:set_wand_result(hid, stats)
@@ -348,7 +339,7 @@ end
 ---| "gunaction_config"
 ---| "gun_config"
 
-local cfgs = {
+local config_types = {
     card = "gunaction_config",
     gun = "gun_config"
 } ---@type {[string]: gun_object}
@@ -482,15 +473,13 @@ local stat_configs = {
 -- cache this module across frames/runs
 local MODULE_CACHE_KEY = "__offerings_wand_util"
 local cached = rawget(_G, MODULE_CACHE_KEY)
-if cached then
-    return cached
-end
+if cached then return cached end
 
 ---Create a wand stat definition with no min, max or functions
 ---@param key wand_stat_key The field of the stat, which is also it's key for lookups
 ---@param cObj? gun_object The object the key resides in, if it resides in gunaction_config|gun_config
 ---@return wand_stat_def result
-function wand_util:makeDef(key, cObj)
+function wand_util:make_wand_stat_definition(key, cObj)
     local stat_math = stat_configs[key]
     assert(stat_math, ("Missing stat config for key '%s'"):format(key))
     local result = stat_def_mt:new({
@@ -510,15 +499,15 @@ function wand_util:makeDef(key, cObj)
 end
 
 -- these are the normal stats with math bounds
-wand_util:makeDef(keys.actions_per_round, cfgs.gun)
-wand_util:makeDef(keys.shuffle_deck_when_empty, cfgs.gun)
-wand_util:makeDef(keys.deck_capacity, cfgs.gun)
-wand_util:makeDef(keys.reload_time, cfgs.gun)
-wand_util:makeDef(keys.speed_multiplier, cfgs.card)
-wand_util:makeDef(keys.spread_degrees, cfgs.card)
-wand_util:makeDef(keys.fire_rate_wait, cfgs.card)
-wand_util:makeDef(keys.gun_level)
-wand_util:makeDef(keys.mana_max)
-wand_util:makeDef(keys.mana_charge_speed)
+wand_util:make_wand_stat_definition(key_map.actions_per_round, config_types.gun)
+wand_util:make_wand_stat_definition(key_map.shuffle_deck_when_empty, config_types.gun)
+wand_util:make_wand_stat_definition(key_map.deck_capacity, config_types.gun)
+wand_util:make_wand_stat_definition(key_map.reload_time, config_types.gun)
+wand_util:make_wand_stat_definition(key_map.speed_multiplier, config_types.card)
+wand_util:make_wand_stat_definition(key_map.spread_degrees, config_types.card)
+wand_util:make_wand_stat_definition(key_map.fire_rate_wait, config_types.card)
+wand_util:make_wand_stat_definition(key_map.gun_level)
+wand_util:make_wand_stat_definition(key_map.mana_max)
+wand_util:make_wand_stat_definition(key_map.mana_charge_speed)
 
 return wand_util

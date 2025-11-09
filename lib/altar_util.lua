@@ -6,7 +6,7 @@ local entity_util = dofile_once("mods/offerings/lib/entity_util.lua") ---@type o
 local logger = dofile_once("mods/offerings/lib/log_util.lua") ---@type log_util
 local wand_util = dofile_once("mods/offerings/lib/wand_util.lua") ---@type wand_util
 
---logger.about("wand_util contents:", wand_util)
+--logger.log("wand_util contents:", wand_util)
 
 local VSC = "VariableStorageComponent"
 local IC = "ItemComponent"
@@ -267,7 +267,8 @@ function M.offer_link_function(lower_altar, seen, linked_count)
     if not M.is_valid_offer(target.item, seen.item) then return false end
     local holder = M.make_holder(lower_altar, seen, linked_count + 1)
     M.set_linked_item_behaviors(lower_altar, false, seen, holder)
-    M.refresh_result(seen.item, target.item, upper_altar, lower_altar, holder, M.is_wand_offer, flask_util.is_flask_offer)
+    M.refresh_result(seen.item, target.item, upper_altar, lower_altar, holder, M.is_wand_offer, flask_util
+        .is_flask_offer)
     return true
 end
 
@@ -293,17 +294,14 @@ end
 ---@param holder entity_id|nil the holder we attached to represent an item, if applicable
 ---@param wand_id_function fun(eid: entity_id): boolean Function detecting that the wand side of the update should happen
 ---@param flask_id_function fun(eid: entity_id): boolean Function detecting that the flask side of the update should happen
-function M.refresh_result(item_triggering_update, item_to_update,
-                                         upper_altar, lower_altar, holder,
-                                         wand_id_function, flask_id_function)
+function M.refresh_result(item_triggering_update, item_to_update, upper_altar,
+                          lower_altar, holder, wand_id_function, flask_id_function)
     if wand_id_function(item_triggering_update) then
         if holder then wand_util:store_wand_stats_in_holder(item_to_update, holder) end
-        local combinedWands = wand_util:gather_altar_wand_stats_and_merge(upper_altar, lower_altar)
-        wand_util:set_wand_result(item_to_update, combinedWands)
+        wand_util:set_wand_result(item_to_update, wand_util:merge_wand_stats(upper_altar, lower_altar))
     elseif flask_id_function(item_triggering_update) then
         if holder then flask_util.store_flask_stats(item_to_update, holder) end
-        local combinedFlasks = flask_util.merge_flask_stats(upper_altar, lower_altar)
-        flask_util.set_flask_results(item_to_update, combinedFlasks)
+        flask_util.set_flask_results(item_to_update, flask_util.merge_flask_stats(upper_altar, lower_altar))
     end
 end
 
@@ -360,7 +358,7 @@ function M.sever(altar, eid, is_pickup)
 end
 
 function M.destroy_used_offerings(target, altar)
-    --logger.about("destroying offerings after picking up", target)
+    --logger.log("destroying offerings after picking up", target)
     local function is_destroying(offer)
         if M.is_wand(target) then return M.is_wand_offer(offer) end
         if flask_util.is_flask(target) then return flask_util.is_flask_offer(offer) end
@@ -466,7 +464,7 @@ function M.cull_or_relink_items(altar, missing_links, linkables, on_pre_sever)
         -- figure out if the link can be restored from an item
         -- at the exact same x and y coordinates as the missing link
         for _, linkable in ipairs(linkables) do
-            --logger.about("missing link", missingLink, "possible replacement", linkable)
+            --logger.log("missing link", missingLink, "possible replacement", linkable)
             if missing_link.innerId == linkable.innerId then
                 relinks[missing_link] = linkable
                 break
@@ -478,14 +476,14 @@ function M.cull_or_relink_items(altar, missing_links, linkables, on_pre_sever)
         end
     end
     for missing, found in pairs(relinks) do
-        --logger.about("relinking item", missing.item, "to item", found.item)
+        --logger.log("relinking item", missing.item, "to item", found.item)
         local reHolder = M.relink(altar, missing.item, found.item)
         if reHolder then
             results[#results + 1] = { holder = reHolder, item = found.item, x = found.x, y = found.y }
         end
     end
     for _, cull in ipairs(culls) do
-        --logger.about("severing missing item", cull.item)
+        --logger.log("severing missing item", cull.item)
         local is_upper_altar = M.is_upper_altar(altar)
         -- restore vanilla behaviors to now-not-linked item
         M.set_linked_item_behaviors(altar, is_upper_altar, cull, nil)

@@ -128,7 +128,7 @@ local defaultPotionDmc = {
 
 function M.makeTempered(eid, level)
     M.storeEnchantKey(eid, "tempered", level)
-    --logger.about("tempered-ing", eid, "level", level)
+    --logger.log("tempered-ing", eid, "level", level)
     local pbcdc = comp_util.first_component(eid, PBCDC, nil)
     comp_util.component_set(pbcdc, "damage_multiplier", (1 - level) * 0.016667)
     if level == 0 then
@@ -147,7 +147,7 @@ end
 
 function M.makeReactive(eid, level)
     M.storeEnchantKey(eid, "reactive", level)
-    --logger.about("reactive-ing", eid, "level", level)
+    --logger.log("reactive-ing", eid, "level", level)
     local suckComp = comp_util.first_component(eid, MSC, nil)
     local barrel = comp_util.component_get(suckComp, "barrel_size")
     local comp = comp_util.first_component(eid, MIC, nil)
@@ -157,13 +157,13 @@ end
 
 function M.makeTransmuting(eid, level)
     M.storeEnchantKey(eid, "transmuting", level)
-    --logger.about("transmuting-ing", eid, "level", level)
+    --logger.log("transmuting-ing", eid, "level", level)
     -- TODO
 end
 
 function M.makeInstant(eid, level)
     M.storeEnchantKey(eid, "instant", level)
-    --logger.about("instant-ing", eid, "level", level)
+    --logger.log("instant-ing", eid, "level", level)
     local barrel_size = comp_util.valueOrDefault(eid, MSC, "barrel_size", 1000) or 1000--- @type number
     local potionComp = comp_util.first_component(eid, "PotionComponent", nil)
     comp_util.component_set(potionComp, "throw_bunch", level == 1)
@@ -173,7 +173,7 @@ end
 local drainXml = "mods/offerings/entity/draining.xml"
 function M.makeDraining(eid, level)
     M.storeEnchantKey(eid, "draining", level)
-    --logger.about("draining-ing", eid, "level", level)
+    --logger.log("draining-ing", eid, "level", level)
 
     --draining is kind of a hack. The moment a draining entity exists they
     --are with you forever, but only "functional" when holding a draining flask.
@@ -284,11 +284,11 @@ function M.is_flask_offer(eid) return M.is_flask(eid) or M.hasAnyEnchantValue(ei
 ---@param eid entity_id
 ---@return boolean
 function M.hasAnyEnchantValue(eid)
-    --logger.about("enchantment defs", flaskEnchantDefs)
+    --logger.log("enchantment defs", flaskEnchantDefs)
     for _, enchant in ipairs(M.flaskEnchantDefs) do
-        --logger.about("def evaluators", #enchant.evaluators)
+        --logger.log("def evaluators", #enchant.evaluators)
         if M.itemEnchantmentValue(enchant, eid) ~= 0 then
-            --logger.about("enchant", enchant, "value detected on", eid)
+            --logger.log("enchant", enchant, "value detected on", eid)
             return true
         end
     end
@@ -306,7 +306,7 @@ function M.describeFlask(combined)
             result = util.appendDescription(result, enchDesc)
         end
     end
-    --logger.about("describing flask, combined stats", combined)
+    --logger.log("describing flask, combined stats", combined)
     if combined.barrel_size[1] > 1000 then
         local barrelSizeDesc = GameTextGet(barrelSizeLoc) .. ": " .. combined.barrel_size[1]
         result = util.appendDescription(result, barrelSizeDesc)
@@ -387,7 +387,7 @@ function M.store_flask_stats(eid, hid)
         if level ~= 0 then comp_util.store_int(hid, prefEnch(key), level) end
     end
     if M.is_flask(eid) then
-        --logger.about("adding flask to offerings")
+        --logger.log("adding flask to offerings")
         -- if the holder has a barrel_size VSC ALSO don't overwrite it.
         local existing = comp_util.get_int(hid, prefOg("barrel_size"))
         if existing then return end
@@ -407,7 +407,7 @@ function M.store_flask_stats(eid, hid)
         comp_util.store_int(hid, prefOg("throw_how_many"), comp_util.component_get(potion, "throw_how_many"))
     elseif M.is_flask_offer(eid) then
         local existing = comp_util.storedBoxesLike(hid, prefEnch(""), "value_int", true)
-        --logger.about("adding enchantment to offerings", eid, "existing enchants", existing)
+        --logger.log("adding enchantment to offerings", eid, "existing enchants", existing)
         if #existing > 0 then return end
 
         -- if the holder already has enchantment VSCs ALSO don't overwrite it
@@ -416,7 +416,7 @@ function M.store_flask_stats(eid, hid)
             for _, eval in ipairs(def.evaluators) do
                 level = level + eval(eid)
             end
-            --logger.about("def", def, "level", level)
+            --logger.log("def", def, "level", level)
             pushEnch(def.key, level)
         end
     end
@@ -436,11 +436,11 @@ function M.merge_flask_stats(upperAltar, lowerAltar)
 
     local offerings = M.holderFlaskStats(lowerAltar)
     M.injectFlaskStatsIntoFlaskStats(upperFlaskStats[1], offerings)
-    --logger.about("results before blend", upperFlaskStats[1], "offerings before blend", offerings)
+    --logger.log("results before blend", upperFlaskStats[1], "offerings before blend", offerings)
 
     local blended = M.blendFlaskStats(upperFlaskStats[1])
 
-    --logger.about("blended flask result", blended)
+    --logger.log("blended flask result", blended)
     return blended
 end
 
@@ -495,7 +495,7 @@ function M.blendFlaskStats(flaskStats)
     local result = M.newFlaskStats()
     for _, def in ipairs(flaskStatDefs) do
         local pool = flaskStats[def.key]
-        --logger.about(def.key .. " pool of stats blending", pool)
+        --logger.log(def.key .. " pool of stats blending", pool)
         if def.formula == "group_sum" then
             for k, v in pairs(pool) do
                 if v ~= 0 then
@@ -507,7 +507,7 @@ function M.blendFlaskStats(flaskStats)
                 end
             end
         else
-            --logger.about("pool of stats", pool, "merge strategy", def.formula)
+            --logger.log("pool of stats", pool, "merge strategy", def.formula)
             while #pool > 1 do
                 local a = table.remove(pool, 1)
                 local b = table.remove(pool, 1)
@@ -533,7 +533,7 @@ function M.blendFlaskStats(flaskStats)
         end
     end
     for _, def in ipairs(M.flaskEnchantDefs) do if result.enchantments[def.key] then clamp(def.key, def) end end
-    --logger.about("flask combo results", result)
+    --logger.log("flask combo results", result)
     return result
 end
 
@@ -541,7 +541,7 @@ end
 ---@param flask entity_id
 ---@param combined FlaskStats|nil
 function M.set_flask_results(flask, combined)
-    --logger.about("setting flask results", flask, "results", combined)
+    --logger.log("setting flask results", flask, "results", combined)
     if not combined then return end
     entity_util.setDescription(flask, M.describeFlask(combined))
 

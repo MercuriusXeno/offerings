@@ -9,7 +9,7 @@ dofile_once("mods/offerings/biome/splice.lua")
 function OnPlayerSpawned( player_entity ) -- This runs when player entity has been created
 	--local potionGlass = 258
 	--local mat = CellFactory_GetName(potionGlass)
-	--logger.about("whatever 258 is", mat)
+	--logger.log("whatever 258 is", mat)
 end
 --[[
 function OnModPreInit()

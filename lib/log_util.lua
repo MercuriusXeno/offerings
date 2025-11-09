@@ -3,7 +3,7 @@ local logger = {} ---@class log_util
 logger.debug_prefix = "-== OFFERINGS_DEBUG ==-   "
 function logger.isDebug() return true end
 
-function logger.debugOut(s)
+function logger.log(s)
     if not logger.isDebug() then return end
 
     if s == "" then return end
@@ -41,16 +41,16 @@ end
 ---print the 1 (name) 2 (value) pair in sequence
 ---If the type is a table, recurse into the pairs
 ---@param ... any
-function logger.about(...)
+function logger.log(...)
     local r = { }
     recursiveAbout(r, 0, ...)
-    for _, s in ipairs(r) do logger.debugOut(s) end
+    for _, s in ipairs(r) do logger.log(s) end
 end
 
 logger.stepNumber = 0
 function logger.step(s)
     logger.stepNumber = logger.stepNumber + 1
-    logger.debugOut(logger.stepNumber .. " " .. s)
+    logger.log(logger.stepNumber .. " " .. s)
 end
 
 return logger
