@@ -41,7 +41,7 @@ end
 ---print the 1 (name) 2 (value) pair in sequence
 ---If the type is a table, recurse into the pairs
 ---@param ... any
-function logger.log(...)
+function logger.peek(...)
     local r = { }
     rescursive_log(r, 0, ...)
     for _, s in ipairs(r) do logger.out(s) end
@@ -50,7 +50,7 @@ end
 logger.stepNumber = 0
 function logger.step(s)
     logger.stepNumber = logger.stepNumber + 1
-    logger.log(logger.stepNumber .. " " .. s)
+    logger.peek(logger.stepNumber .. " " .. s)
 end
 
 return logger

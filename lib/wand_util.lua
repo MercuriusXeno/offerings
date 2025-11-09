@@ -92,20 +92,6 @@ function stat_def_mt:push(abilityComp, amount)
     end
 end
 
----Sets the stats (ability component) of the
----entity provided to be the stats passed in.
----@param wand entity_id
----@param wandStats? wand_stats
-function wand_util:set_wand_result(wand, wandStats)
-    if not wandStats then return end
-    local ability = comp_util.first_component(wand, "AbilityComponent", nil)
-    if not ability then return end
-    for _, key in ipairs(key_array) do
-        local d = self[key]
-        d:push(ability, wandStats[key])
-    end
-end
-
 ---Returns an empty wand stat table to work on
 ---@return wand_stats
 function wand_util:make_stats()
@@ -121,9 +107,8 @@ end
 ---@param eid entity_id Any wand or holder with ability component(s)
 ---@return wand_stats
 function wand_util:convert_to_wand_stats(eid)
-    local comp = comp_util.first_component(eid, "AbilityComponent", nil)
+    local comp = comp_util.get_or_create_comp(eid, "AbilityComponent", nil)
     local result = self:make_stats()
-    if not comp then return result end
     for _, key in ipairs(key_array) do
         local def = self[key]
         local value = def:pull(comp)
@@ -156,8 +141,6 @@ function stat_def_mt:area_under_curve_of_steps(signed_steps)
     local steps = signed_steps * sign
     local linear_growth = 1.0 - 0.5 * adjusted_growth
     local result = (linear_growth * steps + 0.5 * adjusted_growth * steps * steps)
-    --- diminish the impact of negative results slightly
-    if (sign < 0) then result = math.pow(result, 0.9) end
     return result * sign
 end
 
@@ -256,13 +239,16 @@ end
 ---@param offerings wand_stats[] All wands stats as an array of stats holders.
 ---@return wand_stats
 function wand_util:collapse_stat_sums(stats, offerings)
-    for _, key in ipairs(key_array) do
-        local def = self[key]
-        local worth = def:worth_from_value(stats[key])
+    for _, key in ipairs(key_array) do        
+        local worth = self[key]:worth_from_value(stats[key])
+        --logger.peek("stat", key, "  start", stats[key], "  worth", worth)
         for _, offer in ipairs(offerings) do
-            worth = worth + def:worth_from_value(offer[key])
+            local offer_worth = self[key]:worth_from_value(offer[key])
+            worth = worth + offer_worth
+            --logger.peek("  accumulating... ", offer[key], "  worth", offer_worth)
         end
-        stats[key] = def:value_from_worth(worth)
+        stats[key] = self[key]:value_from_worth(worth)
+        --logger.peek("  final ", stats[key])
     end
     return stats
 end
@@ -287,13 +273,17 @@ end
 ---@param upper_altar entity_id
 ---@param lower_altar entity_id|nil
 ---@return wand_stats|nil
-function wand_util:merge_wand_stats(upper_altar, lower_altar)
+function wand_util:combine_altar_item_stats(upper_altar, lower_altar)
+    logger.out("merging wand stats of altars")
     local upper_wand_stats = self:holder_wand_stats_from_altar(upper_altar)
+    --logger.peek("upper stats", upper_wand_stats)
     if #upper_wand_stats == 0 then return nil end
     if not lower_altar then return upper_wand_stats[1] end
 
     local offerings = self:holder_wand_stats_from_altar(lower_altar)
+    --logger.peek("offering stats", offerings)
     local blended = self:collapse_stat_sums(upper_wand_stats[1], offerings)
+    --logger.peek("blended stat values", blended)
     return blended
 end
 
@@ -304,10 +294,23 @@ function wand_util:set_holder_wand_stats(eid, hid)
     -- if the holder doesn't align DO NOT overwrite its stats
     if comp_util.get_int(hid, "eid") ~= eid then return end
     -- we don't care to do anything with it, just ensure it exists
-    local _ = comp_util.get_or_create_comp(hid, "AbilityComponent", nil)
     local stats = self:convert_to_wand_stats(eid)
     -- set the empty ability component stats to be stored ones
     self:set_wand_result(hid, stats)
+end
+
+---Sets the stats (ability component) of the
+---entity provided to be the stats passed in.
+---@param wand entity_id
+---@param stats_to_store? wand_stats
+function wand_util:set_wand_result(wand, stats_to_store)
+    logger.peek("storing wand stats", stats_to_store, "  of wand", wand)
+    if not stats_to_store then return end
+    local ability = comp_util.get_or_create_comp(wand, "AbilityComponent", nil)
+    --logger.peek("ability comp", ability)
+    for _, key in ipairs(key_array) do
+        self[key]:push(ability, stats_to_store[key])
+    end
 end
 
 ---@alias gun_object
@@ -351,7 +354,7 @@ local stat_configs = {
         base = 1,
         inverted = false,
         delta = 1.0,
-        growth = 2.0,
+        growth = 4.0,
         perfect = 26,
         total_cost_of_perfection = 16000,
     },
@@ -362,7 +365,7 @@ local stat_configs = {
         base = 1,
         inverted = false,
         delta = 1.0,
-        growth = 2.0,
+        growth = 4.0,
         perfect = 26,
         total_cost_of_perfection = 16000.0,
     },
@@ -381,7 +384,7 @@ local stat_configs = {
         name = "reload_time",
         min = -240.0,
         max = 240.0,
-        base = 30.0,
+        base = 240.0,
         inverted = true,
         delta = 1.0,
         growth = 1.4,
@@ -390,20 +393,20 @@ local stat_configs = {
     },
     speed_multiplier = {
         name = "speed_multiplier",
-        min = 0.9,
+        min = 0.8,
         max = 10.0,
-        base = 0.9,
+        base = 0.8,
         inverted = false,
         delta = 0.01,
-        growth = 1.8,
+        growth = 1.2,
         perfect = 10.0,
         total_cost_of_perfection = 18400.0
     },
     spread_degrees = {
         name = "spread_degrees",
-        min = -1080.0,
-        max = 1080.0,
-        base = 8.0,
+        min = -1440.0,
+        max = 1440.0,
+        base = 1440.0,
         inverted = true,
         delta = 1.0,
         growth = 1.6,
@@ -414,7 +417,7 @@ local stat_configs = {
         name = "fire_rate_wait",
         min = -240.0,
         max = 240.0,
-        base = 8.0,
+        base = 240.0,
         inverted = true,
         delta = 1.0,
         growth = 1.4,

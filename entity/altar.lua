@@ -1,6 +1,6 @@
 local altar = dofile_once("mods/offerings/lib/altar_util.lua") ---@type offering_altar
 
-local thisAltar = GetUpdatedEntityID()
-altar.do_altar_update_tick(thisAltar, true, altar.target_link_function, altar.target_sever)
-local offeringAltarOfThisAltar = altar.get_lower_altar_near(thisAltar)
-altar.do_altar_update_tick(offeringAltarOfThisAltar, false, altar.offer_link_function, altar.offer_sever)
+local upper_altar = GetUpdatedEntityID()
+altar.do_altar_update_tick(upper_altar, true, altar.target_sever)
+local offering_altar = altar.get_lower_altar_near(upper_altar)
+altar.do_altar_update_tick(offering_altar, false, altar.offer_sever)
