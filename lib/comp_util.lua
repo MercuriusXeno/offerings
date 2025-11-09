@@ -14,6 +14,11 @@ local VSC_FIELDS = { "value_int", "value_string", "value_bool", "value_float" }
 
 local M = {} ---@class offering_component_util
 
+---Return all components matching the type and tag provided
+---@param eid entity_id
+---@param ctype string
+---@param tag? string
+---@return component_id[]
 function M.get_components_by_type_and_tag(eid, ctype, tag)
   if tag ~= nil then
     return EntityGetComponentIncludingDisabled(eid, ctype, tag) or {}
@@ -22,6 +27,12 @@ function M.get_components_by_type_and_tag(eid, ctype, tag)
   end
 end
 
+---Return all components matching the predicate supplied in arguments.
+---@param eid entity_id
+---@param ctype string
+---@param tag? string
+---@param pred any
+---@return table
 function M.componentsWhere(eid, ctype, tag, pred)
   local arr = {}
   local function push(comp) arr[#arr + 1] = comp end
@@ -32,7 +43,7 @@ function M.componentsWhere(eid, ctype, tag, pred)
 end
 
 ---Return an object's property in a comp
----@param comp component_id?
+---@param comp? component_id
 ---@param field string the field name
 ---@return any
 function M.get_component_value(comp, field)
@@ -42,6 +53,10 @@ function M.get_component_value(comp, field)
   return v
 end
 
+---Set the value of a component field, can take table arguments
+---@param comp component_id
+---@param field string
+---@param ... any|table
 function M.set_component_value(comp, field, ...)
   ComponentSetValue2(comp, field, ...)
 end
@@ -129,35 +144,65 @@ end
 ---@param field string
 ---@param value any
 ---@return boolean
-function M.has_component_field_value_equal(eid, ctype, tag, field, value)
+function M.has_component_field_value_like(eid, ctype, tag, field, value)
   return M.first_component_of_type_with_field_like(eid, ctype, tag, field, value) ~= nil
 end
 
-function M.has_component_of_type_with_field(eid, ctype, tag, field, value)
+---Return a component whose field exactly equals the field value provided.
+---@param eid entity_id
+---@param ctype string
+---@param tag string|nil
+---@param field string
+---@param value any
+---@return boolean
+function M.has_component_of_type_with_field_equal(eid, ctype, tag, field, value)
   return M.first_component_of_type_with_field_equal(eid, ctype, tag, field, value) ~= nil
 end
 
--- Toggle/enable/disable
-function M.toggle_component(eid, comp, isEnabled)
-  if comp then EntitySetComponentIsEnabled(eid, comp, isEnabled) end
+---Enable or disable a component (from argument, explicitly)
+---@param eid entity_id
+---@param comp? component_id the component being disabled. if nil, this aborts eagerly.
+---@param is_enabled boolean
+function M.toggle_component(eid, comp, is_enabled)
+  if comp then EntitySetComponentIsEnabled(eid, comp, is_enabled) end
 end
 
-function M.toggle_first_comp_matching(eid, ctype, tag, field, value, isEnabled)
-  M.toggle_component(eid, M.first_component_of_type_with_field_equal(eid, ctype, tag, field, value), isEnabled)
+---Enable or disable the first component (from argument, explicitly) matching the arguments provided.
+---@param eid entity_id
+---@param ctype string
+---@param tag? string
+---@param field string
+---@param value any
+---@param is_enabled boolean
+function M.toggle_first_comp_matching(eid, ctype, tag, field, value, is_enabled)
+  M.toggle_component(eid, M.first_component_of_type_with_field_equal(eid, ctype, tag, field, value), is_enabled)
 end
 
-function M.toggle_components_by_type_and_tag(eid, ctype, tag, isEnabled)
-  local function flip(e, comp) M.toggle_component(e, comp, isEnabled) end
+---Enable or disable all components (from argument, explicitly) matching the arguments provided.
+---@param eid entity_id
+---@param ctype string
+---@param tag? string
+---@param is_enabled boolean
+function M.toggle_components_by_type_and_tag(eid, ctype, tag, is_enabled)
+  local function flip(e, comp) M.toggle_component(e, comp, is_enabled) end
   M.each_component(eid, ctype, tag, flip)
 end
 
--- Bulk setters
+---Iterate over all components of a type and tag and set their field to a provided value.
+---@param eid entity_id
+---@param ctype string
+---@param tag? any
+---@param field string
+---@param ... any|table
 function M.set_each_component_type_field(eid, ctype, tag, field, ...)
   local comps = M.get_components_by_type_and_tag(eid, ctype, tag)
   for _, comp in ipairs(comps) do M.set_component_value(comp, field, ...) end
 end
 
--- Removal helpers
+---Remove all components from an entity of a given type and tag
+---@param eid any
+---@param ctype any
+---@param tag any
 function M.remove_all_components_of_type(eid, ctype, tag)
   M.each_component(eid, ctype, tag, EntityRemoveComponent)
 end

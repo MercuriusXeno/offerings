@@ -4,11 +4,11 @@ local IC = "ItemComponent"
 local M = {} ---@class offering_entity_util
 
 function M.has_word_in_name(eid, s)
-    return comp_util.has_component_field_value_equal(eid, IC, nil, "item_name", s)
+    return comp_util.has_component_field_value_like(eid, IC, nil, "item_name", s)
 end
 
 function M.is_item_named(eid, name)
-    return comp_util.has_component_of_type_with_field(eid, IC, nil, "item_name", name)
+    return comp_util.has_component_of_type_with_field_equal(eid, IC, nil, "item_name", name)
 end
 
 function M.get_entity_name(eid)

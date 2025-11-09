@@ -133,7 +133,10 @@ local default_potion_damage_multiplier_component = {
 function M.set_tempered_enchant_level(eid, level)
     M.set_enchant_level(eid, "tempered", level)
     local pbcdc = comp_util.first_component(eid, PBCDC, nil)
-    comp_util.set_component_value(pbcdc, "damage_multiplier", (1 - level) * 0.016667)
+    if pbcdc then
+        comp_util.set_component_value(pbcdc, "damage_multiplier", (1 - level) * 0.016667)
+    end
+
     if level == 0 then
         EntityAddComponent2(eid, DMC, default_potion_damage_multiplier_component)
     else
@@ -152,9 +155,11 @@ function M.set_reactive_enchant_level(eid, level)
     M.set_enchant_level(eid, "reactive", level)
     local suckComp = comp_util.first_component(eid, MSC, nil)
     local barrel = comp_util.get_component_value(suckComp, "barrel_size")
-    local comp = comp_util.first_component(eid, MIC, nil)
-    comp_util.set_component_value(comp, "do_reactions", 20 + (level * 20))
-    comp_util.set_component_value(comp, "reaction_speed", math.floor(barrel / 200) * (level + 1))
+    local mic = comp_util.first_component(eid, MIC, nil)
+    if mic then
+        comp_util.set_component_value(mic, "do_reactions", 20 + (level * 20))
+        comp_util.set_component_value(mic, "reaction_speed", math.floor(barrel / 200) * (level + 1))
+    end
 end
 
 function M.set_transmuting_enchant_level(eid, level)
@@ -165,9 +170,11 @@ end
 function M.set_flooding_enchant_level(eid, level)
     M.set_enchant_level(eid, "flooding", level)
     local barrel_size = comp_util.value_or_default(eid, MSC, "barrel_size", 1000) or 1000 --- @type number
-    local potionComp = comp_util.first_component(eid, "PotionComponent", nil)
-    comp_util.set_component_value(potionComp, "throw_bunch", level == 1)
-    comp_util.set_component_value(potionComp, "throw_how_many", math.floor(math.pow(barrel_size, 0.8)))
+    local potion = comp_util.first_component(eid, "PotionComponent", nil)
+    if potion then
+        comp_util.set_component_value(potion, "throw_bunch", level == 1)
+        comp_util.set_component_value(potion, "throw_how_many", math.floor(math.pow(barrel_size, 0.8)))
+    end
 end
 
 ---TODO make this into "remote" and let it place remotely as well as drain
@@ -552,16 +559,19 @@ function M.set_flask_results(flask, combined)
     entity_util.setDescription(flask, M.get_flask_description(combined))
 
     local msc = comp_util.first_component(flask, MSC, nil)
-    comp_util.set_component_value(msc, "barrel_size", combined.barrel_size[1])
-    comp_util.set_component_value(msc, "num_cells_sucked_per_frame", combined.num_cells_sucked_per_frame[1])
+    if msc then
+        comp_util.set_component_value(msc, "barrel_size", combined.barrel_size[1])
+        comp_util.set_component_value(msc, "num_cells_sucked_per_frame", combined.num_cells_sucked_per_frame[1])
+    end
 
     local potion = comp_util.first_component(flask, "PotionComponent", nil)
-    comp_util.set_component_value(potion, "spray_velocity_coeff", combined.spray_velocity_coeff[1])
-    comp_util.set_component_value(potion, "spray_velocity_normalized_min", combined.spray_velocity_normalized_min[1])
-    comp_util.set_component_value(potion, "throw_how_many", combined.throw_how_many[1])
-    comp_util.set_component_value(potion, "dont_spray_just_leak_gas_materials", false)
-    comp_util.set_component_value(potion, "throw_bunch", false)
-
+    if potion then
+        comp_util.set_component_value(potion, "spray_velocity_coeff", combined.spray_velocity_coeff[1])
+        comp_util.set_component_value(potion, "spray_velocity_normalized_min", combined.spray_velocity_normalized_min[1])
+        comp_util.set_component_value(potion, "throw_how_many", combined.throw_how_many[1])
+        comp_util.set_component_value(potion, "dont_spray_just_leak_gas_materials", false)
+        comp_util.set_component_value(potion, "throw_bunch", false)
+    end
     for _, def in ipairs(M.flask_enchantment_definitions) do
         local level = combined.enchantments[def.key] or 0
         def.apply(flask, level)

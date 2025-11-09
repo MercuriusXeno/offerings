@@ -436,7 +436,7 @@ function M.set_linked_item_behaviors(altar, is_upper_altar, seen, hid)
     -- re-enables the first time pickup particles, which are fancy
     if is_upper_altar then
         local pickup = M.is_wand(seen.item) and wand_pickup_sript or flask_pickup_script
-        if is_holder_linked and not comp_util.has_component_of_type_with_field(seen.item, LC, nil, pickup_lua, pickup[pickup_lua]) then
+        if is_holder_linked and not comp_util.has_component_of_type_with_field_equal(seen.item, LC, nil, pickup_lua, pickup[pickup_lua]) then
             EntityAddComponent2(seen.item, LC, pickup)
         else
             comp_util.toggle_first_comp_matching(seen.item, LC, nil, pickup_lua, pickup[pickup_lua], is_holder_linked)
