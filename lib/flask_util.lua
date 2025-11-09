@@ -63,7 +63,7 @@ local flaskStatDefs = {
 
 local M = {} ---@class offering_flask_util
 
-function M.isFlask(eid) return EntityHasTag(eid, "potion") or entity_util.itemNamed(eid, "$item_cocktail") end
+function M.is_flask(eid) return EntityHasTag(eid, "potion") or entity_util.itemNamed(eid, "$item_cocktail") end
 
 ---Scrape the level of enchantment an item gives by looping over a def's evaluators
 ---@param def FlaskEnchantDef
@@ -105,7 +105,7 @@ end
 function M.storeEnchantKey(eid, key, level)
     local fullkey = enchantPrefix .. key
     comp_util.removeMatch(eid, VSC, nil, "name", fullkey)
-    comp_util.storeInt(eid, fullkey, level)
+    comp_util.store_int(eid, fullkey, level)
 end
 
 local defaultPotionDmc = {
@@ -134,7 +134,7 @@ function M.makeTempered(eid, level)
     if level == 0 then
         EntityAddComponent2(eid, DMC, defaultPotionDmc)
     else
-        comp_util.removeAll(eid, DMC, nil)
+        comp_util.remove_all_comps(eid, DMC, nil)
     end
 
     local dc = comp_util.first_component(eid, DMC, nil)
@@ -278,7 +278,7 @@ M.flaskEnchantDefs = {
     }
 }
 
-function M.isFlaskEnhancer(eid) return M.isFlask(eid) or M.hasAnyEnchantValue(eid) end
+function M.is_flask_offer(eid) return M.is_flask(eid) or M.hasAnyEnchantValue(eid) end
 
 ---Return whether the item has an enchantment value of any kind
 ---@param eid entity_id
@@ -355,11 +355,11 @@ function M.holderFlaskStats(altar)
         result[#result + 1] = {
             materials = M.materializeMaterials(comp_util.storedBoxesLike(holder, prefMat(""), "value_int", true)),
             enchantments = M.materializeEnchants(comp_util.storedBoxesLike(holder, prefEnch(""), "value_int", true)),
-            barrel_size = { comp_util.storedInt(holder, prefOg("barrel_size")) },
-            num_cells_sucked_per_frame = { comp_util.storedInt(holder, prefOg("num_cells_sucked_per_frame")) },
+            barrel_size = { comp_util.get_int(holder, prefOg("barrel_size")) },
+            num_cells_sucked_per_frame = { comp_util.get_int(holder, prefOg("num_cells_sucked_per_frame")) },
             spray_velocity_coeff = { comp_util.storedFloat(holder, prefOg("spray_velocity_coeff")) },
             spray_velocity_normalized_min = { comp_util.storedFloat(holder, prefOg("spray_velocity_normalized_min")) },
-            throw_how_many = { comp_util.storedInt(holder, prefOg("throw_how_many")) }
+            throw_how_many = { comp_util.get_int(holder, prefOg("throw_how_many")) }
         } ---@type FlaskStats
     end
     return result
@@ -369,7 +369,7 @@ end
 ---@param flask entity_id
 ---@return table<integer, integer>
 function M.flaskMaterials(flask)
-    if M.isFlask(flask) then
+    if M.is_flask(flask) then
         local comp = comp_util.first_component(flask, MIC, nil)
         return comp_util.component_get(comp, "count_per_material_type") ---@type table<integer, integer>
     end
@@ -380,32 +380,32 @@ end
 ---If the holder is a flask enchanter and not a flask, it behaves differently
 ---@param eid entity_id
 ---@param hid entity_id
-function M.storeFlaskStats(eid, hid)
-    if comp_util.storedInt(hid, "eid") ~= eid then return end
+function M.store_flask_stats(eid, hid)
+    if comp_util.get_int(hid, "eid") ~= eid then return end
 
     local function pushEnch(key, level)
-        if level ~= 0 then comp_util.storeInt(hid, prefEnch(key), level) end
+        if level ~= 0 then comp_util.store_int(hid, prefEnch(key), level) end
     end
-    if M.isFlask(eid) then
+    if M.is_flask(eid) then
         --logger.about("adding flask to offerings")
         -- if the holder has a barrel_size VSC ALSO don't overwrite it.
-        local existing = comp_util.storedInt(hid, prefOg("barrel_size"))
+        local existing = comp_util.get_int(hid, prefOg("barrel_size"))
         if existing then return end
 
         local materials = M.flaskMaterials(eid)
-        local function pushMat(matId, amount) if amount > 0 then comp_util.storeInt(hid, prefMat(matId), amount) end end
+        local function pushMat(matId, amount) if amount > 0 then comp_util.store_int(hid, prefMat(matId), amount) end end
         for matId, amount in pairs(materials) do pushMat(matId, amount) end
         for _, def in ipairs(M.flaskEnchantDefs) do pushEnch(def.key, M.enchantLevel(eid, def.key)) end
 
         local msc = comp_util.first_component(eid, MSC, nil)
-        comp_util.storeInt(hid, prefOg("num_cells_sucked_per_frame"), comp_util.component_get(msc, "num_cells_sucked_per_frame"))
-        comp_util.storeInt(hid, prefOg("barrel_size"), comp_util.component_get(msc, "barrel_size"))
+        comp_util.store_int(hid, prefOg("num_cells_sucked_per_frame"), comp_util.component_get(msc, "num_cells_sucked_per_frame"))
+        comp_util.store_int(hid, prefOg("barrel_size"), comp_util.component_get(msc, "barrel_size"))
 
         local potion = comp_util.first_component(eid, "PotionComponent", nil)
         comp_util.storeFloat(hid, prefOg("spray_velocity_coeff"), comp_util.component_get(potion, "spray_velocity_coeff"))
         comp_util.storeFloat(hid, prefOg("spray_velocity_normalized_min"), comp_util.component_get(potion, "spray_velocity_normalized_min"))
-        comp_util.storeInt(hid, prefOg("throw_how_many"), comp_util.component_get(potion, "throw_how_many"))
-    elseif M.isFlaskEnhancer(eid) then
+        comp_util.store_int(hid, prefOg("throw_how_many"), comp_util.component_get(potion, "throw_how_many"))
+    elseif M.is_flask_offer(eid) then
         local existing = comp_util.storedBoxesLike(hid, prefEnch(""), "value_int", true)
         --logger.about("adding enchantment to offerings", eid, "existing enchants", existing)
         if #existing > 0 then return end
@@ -429,7 +429,7 @@ end
 ---@param upperAltar entity_id
 ---@param lowerAltar entity_id|nil
 ---@return FlaskStats|nil
-function M.mergeFlaskStats(upperAltar, lowerAltar)
+function M.merge_flask_stats(upperAltar, lowerAltar)
     local upperFlaskStats = M.holderFlaskStats(upperAltar)
     if #upperFlaskStats == 0 then return nil end
     if not lowerAltar then return upperFlaskStats[1] end
@@ -540,7 +540,7 @@ end
 ---Sets the result of the flask item in scope to the stats provided.
 ---@param flask entity_id
 ---@param combined FlaskStats|nil
-function M.setFlaskResult(flask, combined)
+function M.set_flask_results(flask, combined)
     --logger.about("setting flask results", flask, "results", combined)
     if not combined then return end
     entity_util.setDescription(flask, M.describeFlask(combined))

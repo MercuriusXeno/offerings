@@ -331,7 +331,7 @@ end
 function wand_util:store_wand_stats_in_holder(eid, hid)
     -- logger.about("storing wand stats of", eid, "on holder", hid)
     -- if the holder doesn't align DO NOT overwrite its stats
-    if comp_util.storedInt(hid, "eid") ~= eid then return end
+    if comp_util.get_int(hid, "eid") ~= eid then return end
     local ability = comp_util.first_component(hid, "AbilityComponent", nil)
     -- logger.about("holder ability component exists?", ability ~= nil, "ability", ability)
     -- if the holder already has a stat block ALSO don't overwrite it.

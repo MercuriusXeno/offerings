@@ -124,7 +124,7 @@ local function toggleComp(eid, comp, isEnabled)
   if comp then EntitySetComponentIsEnabled(eid, comp, isEnabled) end
 end
 
-local function toggleFirstCompMatching(eid, ctype, tag, field, value, isEnabled)
+local function toggle_first_comp_matching(eid, ctype, tag, field, value, isEnabled)
   toggleComp(eid, firstComponentMatching(eid, ctype, tag, field, value), isEnabled)
 end
 
@@ -221,29 +221,29 @@ M.component_object_get = cObjGet
 M.component_object_set = cObjSet
 M.component_set = component_set
 
-M.eachComponentSet = eachComponentSet
+M.each_component_set = eachComponentSet
 M.eachEntityComponent = eachEntityComponent
 
 M.first_component = first_component
 M.firstComponentMatching = firstComponentMatching
 
 M.hasCompLike = hasCompLike
-M.hasCompMatch = hasCompMatch
+M.has_comp_match = hasCompMatch
 
-M.removeAll = removeAll
+M.remove_all_comps = removeAll
 M.removeMatch = removeMatch
 
 M.storeFloat = storeFloat
-M.storeInt = storeInt
+M.store_int = storeInt
 
 M.storedFloat = storedFloat
-M.storedInt = storedInt
+M.get_int = storedInt
 
 M.storedBoxesLike = storedBoxesLike
 M.storedsLike = storedsLike
 M.toggleComp = toggleComp
-M.toggleComps = toggleComps
-M.toggleFirstCompMatching = toggleFirstCompMatching
+M.toggle_comps = toggleComps
+M.toggle_first_comp_matching = toggle_first_comp_matching
 
 M.valueOrDefault = valueOrDefault
 

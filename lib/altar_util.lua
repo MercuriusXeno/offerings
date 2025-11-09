@@ -25,18 +25,13 @@ local PEC = "ParticleEmitterComponent"
 ---@field item entity_id
 ---@field innerId integer
 
-local targetAltarWidth = 25
-targetAltarWidth = targetAltarWidth
-local offerAltarWidth = 58
-offerAltarWidth = offerAltarWidth
-local targetAltarRadius = math.ceil(targetAltarWidth / 2)
-targetAltarRadius = targetAltarRadius
-local offerAltarRadius = math.ceil(offerAltarWidth / 2)
-offerAltarRadius = offerAltarRadius
+local UPPER_ALTAR_WIDTH = 25
+local LOWER_ALTAR_WIDTH = 58
+local UPPER_ALTAR_RANGE = math.ceil(UPPER_ALTAR_WIDTH / 2)
+local LOWER_ALTAR_RANGE = math.ceil(LOWER_ALTAR_WIDTH / 2)
 
-local pickupLua = "script_item_picked_up"
-pickupLua = pickupLua
-local pickupFlask = {
+local pickup_lua = "script_item_picked_up"
+local flask_pickup_script = {
     execute_every_n_frame = 1,
     execute_times = 0,
     limit_how_many_times_per_frame = -1,
@@ -47,7 +42,7 @@ local pickupFlask = {
     mTimesExecutedThisFrame = 0
 }
 
-local pickupWand = {
+local wand_pickup_sript = {
     execute_every_n_frame = 1,
     execute_times = 0,
     limit_how_many_times_per_frame = -1,
@@ -58,47 +53,53 @@ local pickupWand = {
     mTimesExecutedThisFrame = 0
 }
 
-local upperAltarTag = "offeringsUpperAltar"
-local lowerAltarTag = "offeringsLowerAltar"
+local UPPER_ALTAR_TAG = "offeringsUpperAltar"
+local LOWER_ALTAR_TAG = "offeringsLowerAltar"
 
 
 local M = {} ---@class offering_altar
 
-function M.isUpperAltar(eid) return EntityHasTag(eid, upperAltarTag) end
+function M.is_upper_altar(eid) return EntityHasTag(eid, UPPER_ALTAR_TAG) end
 
-function M.isLowerAltar(eid) return EntityHasTag(eid, lowerAltarTag) end
+function M.is_lower_altar(eid) return EntityHasTag(eid, LOWER_ALTAR_TAG) end
 
-function M.isAltar(eid) return M.isUpperAltar(eid) or M.isLowerAltar(eid) end
+function M.is_altar(eid) return M.is_upper_altar(eid) or M.is_lower_altar(eid) end
 
-function M.upperAltarNear(eid) return entity_util.closestToEntity(eid, upperAltarTag) end
+function M.get_upper_altar_near(eid) return entity_util.get_nearest_entity_with_tag(eid, UPPER_ALTAR_TAG) end
 
-function M.lowerAltarNear(eid) return entity_util.closestToEntity(eid, lowerAltarTag) end
+function M.get_lower_altar_near(eid) return entity_util.get_nearest_entity_with_tag(eid, LOWER_ALTAR_TAG) end
 
-function M.toggleAltarRunes(altar, isLitUp)
-    comp_util.toggleFirstCompMatching(altar, PEC, nil, "gravity", { 0, 0 }, isLitUp)
+function M.toggle_altar_runes(altar, isLitUp)
+    comp_util.toggle_first_comp_matching(altar, PEC, nil, "gravity", { 0, 0 }, isLitUp)
 end
 
-function M.isWand(eid) return EntityHasTag(eid, "wand") end
+function M.is_wand(eid) return EntityHasTag(eid, "wand") end
 
-function M.isWandEnhancer(eid) return M.isWand(eid) end
+function M.is_wand_offer(eid) return M.is_wand(eid) end
 
-function M.isValidTarget(eid) return M.isWand(eid) or flask_util.isFlask(eid) end
+function M.is_valid_target(eid) return M.is_wand(eid) or flask_util.is_flask(eid) end
 
-function M.isWandMatch(target, offer) return M.isWand(target) and M.isWandEnhancer(offer) end
+function M.is_wand_match(target, offer) return M.is_wand(target) and M.is_wand_offer(offer) end
 
-function M.isFlaskMatch(target, offer) return flask_util.isFlask(target) and flask_util.isFlaskEnhancer(offer) end
+function M.is_flask_match(target, offer)
+    return flask_util.is_flask(target) and
+        flask_util.is_flask_offer(offer)
+end
 
 ---Test that the target can be improved by the offering
 ---@param target entity_id The linked item on the upper altar
 ---@param eid entity_id A lower altar potential linked item
 ---@return boolean result true if the target can consume the offering, otherwise false
-function M.isValidOffer(target, eid) return M.isWandMatch(target, eid) or M.isFlaskMatch(target, eid) end
+function M.is_valid_offer(target, eid)
+    return M.is_wand_match(target, eid) or
+        M.is_flask_match(target, eid)
+end
 
 ---Find the missing links in our already linked items, returning those unseen by the loop
 ---@param seenItems SeenItem[] the linkable indices being checked for severance, as an array
 ---@param alreadyLinked table<entity_id,LinkMap> the existing links being checked, as a kvp map of item id to LinkMap
 ---@return MissingLink[] array linked items whose inner id mate needs to be relocated
-function M.detectSeveredLinks(seenItems, alreadyLinked)
+function M.get_severed_links(seenItems, alreadyLinked)
     local missing = {} ---@type SeenItem[]
     for _, linkMap in pairs(alreadyLinked) do
         local found = nil
@@ -113,25 +114,16 @@ function M.detectSeveredLinks(seenItems, alreadyLinked)
             end
         end
         if not found then
-            local innerId = comp_util.storedInt(linkMap.holder, "innerId") or 0
+            local innerId = comp_util.get_int(linkMap.holder, "innerId") or 0
             missing[#missing + 1] = { item = linkMap.item, x = linkMap.x, y = linkMap.y, innerId = innerId }
         end
     end
     return missing
 end
 
----Whether the item was picked up by the player nearby, in which case
----we avoid doing certain recalculations and destroy the offerings if needed.
----@param seen SeenItem
-function M.isMissingItemPickedUp(seen)
-    --logger.about("entity picked up item", isItemInInventory(seen.item))
-    if entity_util.isItemInInventory(seen.item) then return true end
-    return false
-end
-
-function M.isLinkableItem(eid)
-    return not M.isAltar(eid) and (M.isWandEnhancer(eid) or flask_util.isFlaskEnhancer(eid))
-        and not entity_util.isItemInInventory(eid) and EntityGetParent(eid) == 0
+function M.is_linkable_item(eid)
+    return not M.is_altar(eid) and (M.is_wand_offer(eid) or flask_util.is_flask_offer(eid))
+        and not entity_util.is_item_in_player_inventory(eid) and EntityGetParent(eid) == 0
 end
 
 function M.entityIn(ex, ey, x, y, r, v) return ex >= x - r and ex <= x + r and ey >= y - v and ey <= y + v end
@@ -140,19 +132,19 @@ function M.entityIn(ex, ey, x, y, r, v) return ex >= x - r and ex <= x + r and e
 ---@param altar entity_id the altar we're scanning with
 ---@param isUpper boolean whether the altar is the upper "target" altar
 ---@return SeenItem[] table containing the linkables in range as an array or key map.
-function M.linkableItemsNear(altar, isUpper)
+function M.get_linkable_items_near_altar(altar, isUpper)
     -- different radius b/c wider lower altar
-    local radius = isUpper and targetAltarRadius or offerAltarRadius
+    local radius = isUpper and UPPER_ALTAR_RANGE or LOWER_ALTAR_RANGE
     local x, y = EntityGetTransform(altar)
     -- get linkables based on which altar we are
     local result = {} ---@type SeenItem[]
     local entities = EntityGetInRadius(x, y, radius)
     for _, eid in ipairs(entities) do
-        if M.isLinkableItem(eid) then
+        if M.is_linkable_item(eid) then
             local ex, ey = EntityGetTransform(eid)
             local h = ((ex - x) ^ 2 + (ey - y) ^ 2) ^ 0.5
             if h <= radius and M.entityIn(ex, ey, x, y, radius, 10) then
-                local innerId = comp_util.storedInt(eid, "innerId")
+                local innerId = comp_util.get_int(eid, "innerId")
                 result[#result + 1] = { item = eid, x = ex, y = ey, innerId = innerId or 0 }
             end
         end
@@ -170,11 +162,11 @@ end
 ---This returns the items, not the holders.
 ---@param altar entity_id The altar we're checking the links of
 ---@return LinkMap[] array containing the linkables in range as an array
-function M.linkedItemsArray(altar)
+function M.linked_item_array(altar)
     local result = {}
     local children = EntityGetAllChildren(altar) or {}
     for i, child in ipairs(children) do
-        result[i] = { item = comp_util.storedInt(child, "eid") or 0, holder = child }
+        result[i] = { item = comp_util.get_int(child, "eid") or 0, holder = child }
     end
     return result
 end
@@ -183,14 +175,14 @@ end
 ---This returns the items, not the holders.
 ---@param altar entity_id The altar we're checking the links of
 ---@return integer, table<entity_id,LinkMap> map containing the linkables in range as a key map.
-function M.linkedItemsMap(altar)
+function M.linked_item_map(altar)
     local result = {}
     local count = 0
     local children = EntityGetAllChildren(altar) or {}
     for _, child in ipairs(children) do
         local x, y = EntityGetTransform(child)
         ---@diagnostic disable-next-line: assign-type-mismatch
-        local linkMap = { item = comp_util.storedInt(child, "eid") or 0, holder = child, x = x, y = y } ---@type LinkMap
+        local linkMap = { item = comp_util.get_int(child, "eid") or 0, holder = child, x = x, y = y } ---@type LinkMap
         if linkMap.item ~= 0 then
             result[linkMap.item] = linkMap
             count = count + 1
@@ -221,7 +213,7 @@ end
 ---@param offer entity_id The offer being destroyed
 ---@param x number The x coord of the offer
 ---@param y number The y coord of the offer
-function M.dropSpells(offer, x, y)
+function M.drop_spells(offer, x, y)
     local children = EntityGetAllChildren(offer) or {}
     for _, child in ipairs(children) do
         local itemSpell = M.childSpellItem(child)
@@ -229,44 +221,89 @@ function M.dropSpells(offer, x, y)
     end
 end
 
-function M.targetOfAltar(altar)
-    local links = M.linkedItemsArray(altar)
+function M.target_of_altar(altar)
+    local links = M.linked_item_array(altar)
     if #links > 0 then return links[1] end
     return nil
 end
 
-function M.forceUpdates(altar, eid)
-    --logger.about("forcing update from altar", altar, "from id severance", eid)
+function M.force_updates(altar, eid)
     -- ALWAYS recalc after a severance.
-    local upperAltar = M.upperAltarNear(altar)
-    local lowerAltar = M.lowerAltarNear(altar)
-    local target = M.targetOfAltar(upperAltar)
+    local upper_altar = M.get_upper_altar_near(altar)
+    local lower_altar = M.get_lower_altar_near(altar)
+    local target = M.target_of_altar(upper_altar)
     if target == nil then return false end
-    if M.isWand(eid) then
-        local combinedWands =  wand_util:gather_altar_wand_stats_and_merge(upperAltar, lowerAltar)
-        logger.about("combined stats after severance recalc", combinedWands)
-        wand_util:set_wand_result(target.item, combinedWands)
-    end
-    if flask_util.isFlask(eid) then
-        local combinedFlasks = flask_util.mergeFlaskStats(upperAltar, lowerAltar)
-        flask_util.setFlaskResult(target.item, combinedFlasks)
-    end
+    M.refresh_result(eid, target.item, upper_altar, lower_altar, nil, M.is_wand, flask_util.is_flask)
+end
+
+---Handles the logic of determining an object is a valid altar target
+---for the upper altar and linking it if possible.
+---@param upper_altar entity_id The altar to target items with
+---@param seen SeenItem an item or entity id in the altar's collision field
+---@param link_count integer the number of linked items on the altar, lets us create ids
+---@return boolean is_new_link_formed whether the altar found a new link
+function M.target_link_function(upper_altar, seen, link_count)
+    if M.target_of_altar(upper_altar) ~= nil then return false end
+    if not M.is_valid_target(seen.item) then return false end
+
+    -- handle adding or removing item from the altar children
+    local holder = M.make_holder(upper_altar, seen, link_count + 1)
+    M.set_linked_item_behaviors(upper_altar, true, seen, holder)
+    local lower_altar = M.get_lower_altar_near(upper_altar)
+    M.refresh_result(seen.item, seen.item, upper_altar, lower_altar, holder, M.is_wand, flask_util.is_flask)
+    return true
+end
+
+---Handles the logic of determining an object is a valid offering
+---for the lower altar and linking it if possible.
+---@param lower_altar entity_id The altar to sacrifice items with
+---@param seen SeenItem an item or entity id in the altar's collision field
+---@param linked_count integer the number of linked items on the altar, lets us create ids
+---@return boolean is_new_link_formed whether the altar found a new link
+function M.offer_link_function(lower_altar, seen, linked_count)
+    local upper_altar = M.get_upper_altar_near(lower_altar)
+    local target = M.target_of_altar(upper_altar)
+    if target == nil then return false end
+    if not M.is_valid_offer(target.item, seen.item) then return false end
+    local holder = M.make_holder(lower_altar, seen, linked_count + 1)
+    M.set_linked_item_behaviors(lower_altar, false, seen, holder)
+    M.refresh_result(seen.item, target.item, upper_altar, lower_altar, holder, M.is_wand_offer, flask_util.is_flask_offer)
+    return true
+end
+
+---Before-sever-function for offers, restores them to their vanilla state.
+---@param altar entity_id The target altar restoring the item
+---@param seenItem SeenItem The item id being restored
+function M.offer_sever(altar, seenItem)
+    -- NOOP
+end
+
+---Before-sever-function for targets, restores them to their vanilla state.
+---@param upper_altar entity_id The target altar restoring the item
+---@param seen SeenItem The item id being restored
+function M.target_sever(upper_altar, seen)
+    M.refresh_result(seen.item, seen.item, upper_altar, nil, nil, M.is_wand, flask_util.is_flask)
 end
 
 ---Common logic of the various update procedures, refactors/deduplicates some calls
+---@param item_triggering_update entity_id the item which triggered the update, possibly not the updating item
 ---@param item_to_update entity_id the item we're targeting
----@param upperAltar entity_id the upper altar id
----@param lowerAltar entity_id the lower altar id
+---@param upper_altar entity_id the upper altar id
+---@param lower_altar entity_id|nil the lower altar id, passing nil will reset the target item
 ---@param holder entity_id|nil the holder we attached to represent an item, if applicable
-function M.update_result_shared(item_to_update, upperAltar, lowerAltar, holder)
-    if M.isWand(item_to_update) then
+---@param wand_id_function fun(eid: entity_id): boolean Function detecting that the wand side of the update should happen
+---@param flask_id_function fun(eid: entity_id): boolean Function detecting that the flask side of the update should happen
+function M.refresh_result(item_triggering_update, item_to_update,
+                                         upper_altar, lower_altar, holder,
+                                         wand_id_function, flask_id_function)
+    if wand_id_function(item_triggering_update) then
         if holder then wand_util:store_wand_stats_in_holder(item_to_update, holder) end
-        local combinedWands = wand_util:gather_altar_wand_stats_and_merge(upperAltar, lowerAltar)
+        local combinedWands = wand_util:gather_altar_wand_stats_and_merge(upper_altar, lower_altar)
         wand_util:set_wand_result(item_to_update, combinedWands)
-    elseif flask_util.isFlask(item_to_update) then
-        if holder then flask_util.storeFlaskStats(item_to_update, holder) end
-        local combinedFlasks = flask_util.mergeFlaskStats(upperAltar, lowerAltar)
-        flask_util.setFlaskResult(item_to_update, combinedFlasks)
+    elseif flask_id_function(item_triggering_update) then
+        if holder then flask_util.store_flask_stats(item_to_update, holder) end
+        local combinedFlasks = flask_util.merge_flask_stats(upper_altar, lower_altar)
+        flask_util.set_flask_results(item_to_update, combinedFlasks)
     end
 end
 
@@ -281,20 +318,18 @@ function M.relink(altar, missing, relinkTo)
     local holders = EntityGetAllChildren(altar) or {}
     local result = nil
     for _, hid in ipairs(holders) do
-        if comp_util.storedInt(hid, "eid") == missing then
+        if comp_util.get_int(hid, "eid") == missing then
             comp_util.removeMatch(hid, VSC, nil, "name", "eid")
-            comp_util.storeInt(hid, "eid", relinkTo)
+            comp_util.store_int(hid, "eid", relinkTo)
             result = hid
             break
         end
     end
-    local upperAltar = M.upperAltarNear(altar)
     -- if the item being relinked is the upper altar
     -- our objective is to *reset* the upper altar, not
     -- to regenerate the stats. It will have lost its originals.
-    if upperAltar == altar then
-        --logger.about("upper altar needs reset", true, "item missing", missing)
-        M.forceUpdates(altar, missing)
+    if M.get_upper_altar_near(altar) == altar then
+        M.force_updates(altar, missing)
     end
     return result
 end
@@ -303,43 +338,40 @@ end
 ---of comps needed before an update is coerced.
 ---@param altar entity_id The altar of the item that was severed.
 ---@param eid entity_id The item that was severed
----@param isPickup boolean Whether the item was flagged as picked up
-function M.sever(altar, eid, isPickup)
+---@param is_pickup boolean Whether the item was flagged as picked up
+function M.sever(altar, eid, is_pickup)
     -- if this is the upper altar
     local holders = EntityGetAllChildren(altar) or {}
     local hidToRemove = nil ---@type entity_id
     for _, hid in ipairs(holders) do
-        if comp_util.storedInt(hid, "eid") == eid then
-            hidToRemove = hid
-            --logger.about("killing holder", hid)
-        end
+        if comp_util.get_int(hid, "eid") == eid then hidToRemove = hid end
     end
     if hidToRemove ~= 0 then
-        comp_util.removeAll(hidToRemove, VSC, nil)
-        comp_util.removeAll(hidToRemove, "AbilityComponent", nil)
+        comp_util.remove_all_comps(hidToRemove, VSC, nil)
+        comp_util.remove_all_comps(hidToRemove, "AbilityComponent", nil)
         EntityKill(hidToRemove)
     end
-    if isPickup then return end
-    local upperAltar = M.upperAltarNear(altar)
-    local upperItems = #M.linkedItemsArray(upperAltar)
+    if is_pickup then return end
+    local upperAltar = M.get_upper_altar_near(altar)
+    local upperItems = #M.linked_item_array(upperAltar)
     if upperItems > 0 then
-        M.forceUpdates(altar, eid)
+        M.force_updates(altar, eid)
     end
 end
 
-function M.destroyAltarItemsUsedInTarget(target, altar)
+function M.destroy_used_offerings(target, altar)
     --logger.about("destroying offerings after picking up", target)
-    local function shouldDestroy(offer)
-        if M.isWand(target) then return M.isWandEnhancer(offer) end
-        if flask_util.isFlask(target) then return flask_util.isFlaskEnhancer(offer) end
+    local function is_destroying(offer)
+        if M.is_wand(target) then return M.is_wand_offer(offer) end
+        if flask_util.is_flask(target) then return flask_util.is_flask_offer(offer) end
         return false
     end
     local function destroy(offer)
         -- before destroying flasks, empty them
-        if flask_util.isFlask(offer) then RemoveMaterialInventoryMaterial(offer) end
+        if flask_util.is_flask(offer) then RemoveMaterialInventoryMaterial(offer) end
         -- before destroying wands, drop their spells
         local x, y = EntityGetTransform(offer)
-        if M.isWand(offer) then M.dropSpells(offer, x, y) end
+        if M.is_wand(offer) then M.drop_spells(offer, x, y) end
 
         EntityLoad("data/entities/particles/destruction.xml", x, y)
         GamePlaySound("data/audio/Desktop/projectiles.bank", "magic/common_destroy", x, y)
@@ -348,8 +380,8 @@ function M.destroyAltarItemsUsedInTarget(target, altar)
         -- sever kills the holder, but we still need to kill the actual offering
         EntityKill(offer)
     end
-    for _, linkMap in ipairs(M.linkedItemsArray(altar)) do
-        if shouldDestroy(linkMap.item) then destroy(linkMap.item) end
+    for _, linkMap in ipairs(M.linked_item_array(altar)) do
+        if is_destroying(linkMap.item) then destroy(linkMap.item) end
     end
 end
 
@@ -359,89 +391,89 @@ end
 ---@param seen SeenItem
 ---@param innerId integer the number of items on the altar + 1, lets us create links explicitly
 ---@return entity_id
-function M.makeHolderLink(altar, seen, innerId)
+function M.make_holder(altar, seen, innerId)
     -- create a holder for the item and add it to the altar
     local e = EntityLoad("mods/offerings/entity/holder.xml", seen.x, seen.y)
-    comp_util.storeInt(e, "eid", seen.item)
+    comp_util.store_int(e, "eid", seen.item)
     -- reverse lookup thing here, link them to the same id so they know about eachother through a
     -- persistent id. we can't rely on the entity_id but we can persist our own.
-    comp_util.storeInt(e, "innerId", innerId)
-    comp_util.storeInt(seen.item, "innerId", innerId)
+    comp_util.store_int(e, "innerId", innerId)
+    comp_util.store_int(seen.item, "innerId", innerId)
     EntityAddChild(altar, e)
     return e
 end
 
 ---Handle linking and unlinking items from an altar, setting and reversing various things.
 ---@param altar entity_id the altar linking or severing
----@param isUpper boolean whether this is the upper (target) altar
+---@param is_upper_altar boolean whether this is the upper (target) altar
 ---@param seen SeenItem the item being linked or severed
 ---@param hid entity_id|nil the holder item linked to the item, if one exists
-function M.setLinkedItemBehaviors(altar, isUpper, seen, hid)
-    local isItemLinked = hid ~= nil
-    M.toggleAltarRunes(altar, isItemLinked)
+function M.set_linked_item_behaviors(altar, is_upper_altar, seen, hid)
+    local is_holder_linked = hid ~= nil
+    M.toggle_altar_runes(altar, is_holder_linked)
 
     -- aesthetic stuff when linking the item to the altar, rotation mainly.
-    if isItemLinked then
+    if is_holder_linked then
         local x, y = EntityGetTransform(altar)
-        local dx = isUpper and x or seen.x
+        local dx = is_upper_altar and x or seen.x
         local dy = y - 5 -- floaty
-        local uprightRot = M.isWand(seen.item) and -math.pi * 0.5 or 0.0
-        EntitySetTransform(seen.item, dx, dy, uprightRot)
+        local vertically_rotated = M.is_wand(seen.item) and -math.pi * 0.5 or 0.0
+        EntitySetTransform(seen.item, dx, dy, vertically_rotated)
         -- ensure the item holder matches the item's new location
         seen.x = dx
         seen.y = dy
-        if hid then EntitySetTransform(hid, dx, dy, uprightRot) end
-        comp_util.eachComponentSet(seen.item, IC, nil, "spawn_pos", dx, dy)
+        if hid then EntitySetTransform(hid, dx, dy, vertically_rotated) end
+        comp_util.each_component_set(seen.item, IC, nil, "spawn_pos", dx, dy)
     end
 
     -- make "first time pickup" fanfare when picking the item up
-    comp_util.eachComponentSet(seen.item, IC, nil, "has_been_picked_by_player", not isItemLinked)
+    comp_util.each_component_set(seen.item, IC, nil, "has_been_picked_by_player", not is_holder_linked)
 
-    if M.isWand(seen.item) then
+    if M.is_wand(seen.item) then
         -- immobilize wands
-        comp_util.eachComponentSet(seen.item, IC, nil, "play_hover_animation", not isItemLinked)
-        comp_util.eachComponentSet(seen.item, IC, nil, "play_spinning_animation", not isItemLinked)
-        comp_util.toggleComps(seen.item, SPC, nil, not isItemLinked)
+        comp_util.each_component_set(seen.item, IC, nil, "play_hover_animation", not is_holder_linked)
+        comp_util.each_component_set(seen.item, IC, nil, "play_spinning_animation", not is_holder_linked)
+        comp_util.toggle_comps(seen.item, SPC, nil, not is_holder_linked)
     else
-        comp_util.toggleComps(seen.item, "VelocityComponent", nil, not isItemLinked)
+        comp_util.toggle_comps(seen.item, "VelocityComponent", nil, not is_holder_linked)
     end
 
     -- re-enables the first time pickup particles, which are fancy
-    if isUpper then
-        local pickup = M.isWand(seen.item) and pickupWand or pickupFlask
-        if isItemLinked and not comp_util.hasCompMatch(seen.item, LC, nil, pickupLua, pickup[pickupLua]) then
+    if is_upper_altar then
+        local pickup = M.is_wand(seen.item) and wand_pickup_sript or flask_pickup_script
+        if is_holder_linked and not comp_util.has_comp_match(seen.item, LC, nil, pickup_lua, pickup[pickup_lua]) then
             EntityAddComponent2(seen.item, LC, pickup)
         else
-            comp_util.toggleFirstCompMatching(seen.item, LC, nil, pickupLua, pickup[pickupLua], isItemLinked)
+            comp_util.toggle_first_comp_matching(seen.item, LC, nil, pickup_lua, pickup[pickup_lua], is_holder_linked)
         end
     end
 
     -- enable particle emitters on linked items, these are the "new item" particles
-    comp_util.eachComponentSet(seen.item, SPEC, nil, "velocity_always_away_from_center", isItemLinked)
+    comp_util.each_component_set(seen.item, SPEC, nil, "velocity_always_away_from_center", is_holder_linked)
 end
 
 ---Removes any existing links that have been severed by non-existence or removal.
 ---@param altar entity_id the altar doing the unlinking/severing
----@param missingLinks SeenItem[] the existing links being checked, as a kvp map of item id to LinkMap
+---@param missing_links SeenItem[] the existing links being checked, as a kvp map of item id to LinkMap
 ---@param linkables SeenItem[] the linkable indices being checked for severance, as an array
----@param beforeSeverFunc fun(altar: entity_id, seenItem: SeenItem) the function to perform before severing each item
+---@param on_pre_sever fun(altar: entity_id, seenItem: SeenItem) the function to perform before severing each item
 ---@return LinkMap[] relinkedItems the links restored by item location
-function M.cullOrRelinkItemLinks(altar, missingLinks, linkables, beforeSeverFunc)
+function M.cull_or_relink_items(altar, missing_links, linkables, on_pre_sever)
     local relinks = {} ---@type table<SeenItem, SeenItem>
     local culls = {} ---@type SeenItem[]
     local results = {} ---@type LinkMap[]
-    for i, missingLink in ipairs(missingLinks) do
+    for _, missing_link in ipairs(missing_links) do
         -- figure out if the link can be restored from an item
         -- at the exact same x and y coordinates as the missing link
         for _, linkable in ipairs(linkables) do
             --logger.about("missing link", missingLink, "possible replacement", linkable)
-            if missingLink.innerId == linkable.innerId then
-                relinks[missingLink] = linkable
+            if missing_link.innerId == linkable.innerId then
+                relinks[missing_link] = linkable
                 break
             end
         end
-        if relinks[missingLink] == nil then
-            culls[#culls + 1] = missingLink
+        if relinks[missing_link] == nil then
+            culls[#culls + 1] = missing_link
             break
         end
     end
@@ -454,126 +486,56 @@ function M.cullOrRelinkItemLinks(altar, missingLinks, linkables, beforeSeverFunc
     end
     for _, cull in ipairs(culls) do
         --logger.about("severing missing item", cull.item)
-        local isUpper = M.isUpperAltar(altar)
+        local is_upper_altar = M.is_upper_altar(altar)
         -- restore vanilla behaviors to now-not-linked item
-        M.setLinkedItemBehaviors(altar, isUpper, cull, nil)
-        if isUpper and M.isMissingItemPickedUp(cull) then
-            M.destroyAltarItemsUsedInTarget(cull.item, M.lowerAltarNear(altar))
+        M.set_linked_item_behaviors(altar, is_upper_altar, cull, nil)
+        if is_upper_altar and entity_util.is_item_in_player_inventory(cull.item) then
+            M.destroy_used_offerings(cull.item, M.get_lower_altar_near(altar))
             M.sever(altar, cull.item, true)
         else
-            beforeSeverFunc(altar, cull)
+            on_pre_sever(altar, cull)
             M.sever(altar, cull.item, false)
         end
     end
     return results
 end
 
----Executes a linking function and a severing function when the
----requirements for either is met, which depends on the altar calling it.
+---Handles the altar lifecycle "tick", getting linkable items and
+---looking for severed connections, particles and other logic.
 ---@param altar entity_id the altar id running the scan
----@param isUpper boolean whether the altar is the target altar
----@param linkFunc fun(altar: entity_id, eid: SeenItem, linkCount: integer): boolean the link function to use
----@param beforeSeverFunc fun(altar: entity_id, eid: SeenItem)
-function M.scanForLinkableItems(altar, isUpper, linkFunc, beforeSeverFunc)
+---@param is_upper_altar boolean whether the altar is the target altar
+---@param link_function fun(altar: entity_id, eid: SeenItem, linkCount: integer): boolean the link function to use
+---@param pre_sever_function fun(altar: entity_id, eid: SeenItem)
+function M.do_altar_update_tick(altar, is_upper_altar, link_function, pre_sever_function)
     -- ignore altars that are far from the player.
     local x, y = EntityGetTransform(altar)
 
     -- floaty particle stuff and a light when player is near
-    local isPlayerNear = #EntityGetInRadiusWithTag(x, y, 120, "player_unit") > 0
-    comp_util.toggleFirstCompMatching(altar, PEC, nil, "gravity", { 0, -10 }, isPlayerNear)
-    comp_util.toggleComps(altar, "LightComponent", nil, isPlayerNear)
-    local hasAnyLink = false
-    if isPlayerNear then
+    local is_player_near = #EntityGetInRadiusWithTag(x, y, 120, "player_unit") > 0
+    comp_util.toggle_first_comp_matching(altar, PEC, nil, "gravity", { 0, -10 }, is_player_near)
+    comp_util.toggle_comps(altar, "LightComponent", nil, is_player_near)
+    local has_any_link = false
+    if is_player_near then
         -- search for linkables, including already linked items
         -- we need all items because we are culling any items that aren't in range
         -- and already linked items don't want to be *culled*, just avoid linking >1 time.
-        local linkables = M.linkableItemsNear(altar, isUpper)
-        local linkCount, alreadyLinked = M.linkedItemsMap(altar)
-        local missingLinks = M.detectSeveredLinks(linkables, alreadyLinked)
-        local relinkedLinkmaps = M.cullOrRelinkItemLinks(altar, missingLinks, linkables, beforeSeverFunc)
-        for _, linkmap in ipairs(relinkedLinkmaps) do
+        local linkables = M.get_linkable_items_near_altar(altar, is_upper_altar)
+        local link_count, alreadyLinked = M.linked_item_map(altar)
+        local missing_links = M.get_severed_links(linkables, alreadyLinked)
+        local relinked_links = M.cull_or_relink_items(altar, missing_links, linkables, pre_sever_function)
+        for _, linkmap in ipairs(relinked_links) do
             alreadyLinked[linkmap.item] = linkmap
         end
         for _, seen in ipairs(linkables) do
             if alreadyLinked[seen.item] == nil then
-                hasAnyLink = linkFunc(altar, seen, linkCount) or hasAnyLink
+                has_any_link = link_function(altar, seen, link_count) or has_any_link
             else
-                hasAnyLink = true
+                has_any_link = true
             end
         end
     end
     -- these lights ALSO turn off if the player goes away
-    comp_util.toggleFirstCompMatching(altar, PEC, nil, "gravity", { 0, 0 }, hasAnyLink)
-end
-
----Handles the logic of determining an object is a valid altar target
----for the upper altar and linking it if possible.
----@param upperAltar entity_id The altar to target items with
----@param seen SeenItem an item or entity id in the altar's collision field
----@param linkedCount integer the number of linked items on the altar, lets us create ids
----@return boolean isNewLinkFormed whether the altar found a new link
-function M.targetLinkFunc(upperAltar, seen, linkedCount)
-    if M.targetOfAltar(upperAltar) ~= nil then return false end
-    if not M.isValidTarget(seen.item) then return false end
-
-    -- handle adding or removing item from the altar children
-    local holder = M.makeHolderLink(upperAltar, seen, linkedCount + 1)
-    M.setLinkedItemBehaviors(upperAltar, true, seen, holder)
-    if M.isWand(seen.item) then
-        if holder then wand_util:store_wand_stats_in_holder(seen.item, holder) end
-        local combinedWands = wand_util:gather_altar_wand_stats_and_merge(upperAltar, M.lowerAltarNear(upperAltar))
-        wand_util:set_wand_result(seen.item, combinedWands)
-    elseif flask_util.isFlask(seen.item) then
-        if holder then flask_util.storeFlaskStats(seen.item, holder) end
-        local combinedFlasks = flask_util.mergeFlaskStats(upperAltar, M.lowerAltarNear(upperAltar))
-        flask_util.setFlaskResult(seen.item, combinedFlasks)
-    end
-    return true
-end
-
----Handles the logic of determining an object is a valid offering
----for the lower altar and linking it if possible.
----@param lowerAltar entity_id The altar to sacrifice items with
----@param seen SeenItem an item or entity id in the altar's collision field
----@param linkedCount integer the number of linked items on the altar, lets us create ids
----@return boolean isNewLinkFormed whether the altar found a new link
-function M.offerLinkFunc(lowerAltar, seen, linkedCount)
-    local upperAltar = M.upperAltarNear(lowerAltar)
-    local target = M.targetOfAltar(upperAltar)
-    if target == nil then return false end
-    --logger.about("target", target)
-    if not M.isValidOffer(target.item, seen.item) then return false end
-    local holder = M.makeHolderLink(lowerAltar, seen, linkedCount + 1)
-    M.setLinkedItemBehaviors(lowerAltar, false, seen, holder)
-    if M.isWandEnhancer(seen.item) then
-        if holder then wand_util:store_wand_stats_in_holder(seen.item, holder) end
-        local combined = wand_util:gather_altar_wand_stats_and_merge(upperAltar, lowerAltar)
-        wand_util:set_wand_result(target.item, combined)
-    end
-    if flask_util.isFlaskEnhancer(seen.item) then
-        if holder then flask_util.storeFlaskStats(seen.item, holder) end
-        local combined = flask_util.mergeFlaskStats(upperAltar, lowerAltar)
-        flask_util.setFlaskResult(target.item, combined)
-    end
-    return true
-end
-
----Before-sever-function for offers, restores them to their vanilla state.
----@param altar entity_id The target altar restoring the item
----@param seenItem SeenItem The item id being restored
-function M.offerSever(altar, seenItem) end
-
----Before-sever-function for targets, restores them to their vanilla state.
----@param altar entity_id The target altar restoring the item
----@param seenItem SeenItem The item id being restored
-function M.targetSever(altar, seenItem)
-    if M.isWand(seenItem.item) then
-        local combinedWands = wand_util:gather_altar_wand_stats_and_merge(altar, nil)
-        wand_util:set_wand_result(seenItem.item, combinedWands)
-    elseif flask_util.isFlask(seenItem.item) then
-        local combinedFlasks = flask_util.mergeFlaskStats(altar, nil)
-        flask_util.setFlaskResult(seenItem.item, combinedFlasks)
-    end
+    comp_util.toggle_first_comp_matching(altar, PEC, nil, "gravity", { 0, 0 }, has_any_link)
 end
 
 return M

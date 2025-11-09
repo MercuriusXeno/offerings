@@ -38,7 +38,7 @@ local function getDrainParams(d, dx, dy)
     if not result.heldItem then return result end
     local enchantVsc = comp_util.firstComponentMatching(result.heldItem, "VariableStorageComponent",
         nil, "name", "offering_flask_enchant_draining")
-    if not enchantVsc or comp_util.storedInt(result.heldItem, "offering_flask_enchant_draining") == 0 then return result end
+    if not enchantVsc or comp_util.get_int(result.heldItem, "offering_flask_enchant_draining") == 0 then return result end
 
     local parentMsc = comp_util.first_component(result.heldItem, "MaterialSuckerComponent", nil)
     if not parentMsc then return result end
