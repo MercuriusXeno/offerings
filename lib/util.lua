@@ -11,13 +11,6 @@ function M.sum(arr)
   return r
 end
 
----Return the number clamped to a min and max value provided
----@param v number a value to clamp
----@param l number the lower bound
----@param r number the upper bound
----@return number result the clamped value between bounds.
-function M.clamp(v, l, r) return math.min(r, math.max(l, v)) end
-
 function M.increment(t, f, v) t[f] = (t[f] or 0) + v end
 
 -- symmetric when s (shallowness) is 1

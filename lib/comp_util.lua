@@ -31,9 +31,9 @@ end
 ---@param eid entity_id
 ---@param ctype string
 ---@param tag? string
----@param pred any
+---@param pred fun(comp: component_id):boolean The predicate to match the components with
 ---@return table
-function M.componentsWhere(eid, ctype, tag, pred)
+function M.get_components_matching_predicate(eid, ctype, tag, pred)
   local arr = {}
   local function push(comp) arr[#arr + 1] = comp end
   for _, comp in ipairs(M.get_components_by_type_and_tag(eid, ctype, tag)) do
@@ -84,13 +84,18 @@ function M.is_component_field_value_like(comp, field, value)
   return M.get_component_value(comp, field):find(value)
 end
 
--- Iteration helpers
+
+---Iterate over each component and execute a delegate on it
+---@param eid entity_id the entity whose components we're iterating
+---@param ctype string the component type to iterate
+---@param tag? string a tag to filter the component by if applicable
+---@param func fun(entity_id: entity_id, comp: component_id) the function to execute
 function M.each_component(eid, ctype, tag, func)
   for _, comp in ipairs(M.get_components_by_type_and_tag(eid, ctype, tag)) do func(eid, comp) end
 end
 
 function M.each_component_where(eid, ctype, tag, pred, func)
-  for _, comp in ipairs(M.componentsWhere(eid, ctype, tag, pred)) do func(eid, comp) end
+  for _, comp in ipairs(M.get_components_matching_predicate(eid, ctype, tag, pred)) do func(eid, comp) end
 end
 
 function M.each_component_of_type_with_field_matching(eid, ctype, tag, field, val, func)

@@ -39,8 +39,8 @@ local FLASK_STAT_DEFINITIONS = {
     { key = "enchantments",                  formula = "group_sum" },
     { key = "barrel_size",                   formula = "sum" },
     { key = "num_cells_sucked_per_frame",    formula = "sum" },
-    { key = "spray_velocity_coeff",          formula = "clamp_blend" },
-    { key = "spray_velocity_normalized_min", formula = "clamp_blend" },
+    { key = "spray_velocity_coeff",          formula = "blend_throttled" },
+    { key = "spray_velocity_normalized_min", formula = "blend_throttled" },
     { key = "throw_how_many",                formula = "sum" },
     { key = "materials",                     formula = "group_sum" }
 } ---@type flask_stat_definition
@@ -528,7 +528,7 @@ function M.get_merged_flask_stats(stats)
                 local b = table.remove(pool, 1)
                 if def.formula == "sum" then
                     table.insert(pool, 1, a + b)
-                elseif def.formula == "clamp_blend" then
+                elseif def.formula == "blend_throttled" then
                     local scale = 0.5
                     local limit = def.key == "spray_velocity_coeff" and 225 or 1.5
                     local aMerge = util.asymmetricMerge(scale, limit, a, b)
@@ -539,15 +539,19 @@ function M.get_merged_flask_stats(stats)
         end
     end
 
-    -- clamp lower and upper bounds of enchantment def on an enchantment level entry
+    --- bound minimum and maximum levels of enchantment def on an enchantment level entry
     ---@param k string enchantment key from the def
     ---@param d flask_enchant_definition
-    local function clamp(k, d)
+    local function clamp_enchantment_levels(k, d)
         if result.enchantments[k] then
             result.enchantments[k] = math.min(d.max, math.max(d.min, result.enchantments[k]))
         end
     end
-    for _, def in ipairs(M.flask_enchantment_definitions) do if result.enchantments[def.key] then clamp(def.key, def) end end
+    for _, def in ipairs(M.flask_enchantment_definitions) do
+        if result.enchantments[def.key] then
+            clamp_enchantment_levels(def.key, def)
+        end
+    end
     return result
 end
 

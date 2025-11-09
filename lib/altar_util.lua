@@ -225,13 +225,13 @@ function M.target_of_altar(altar)
     return nil
 end
 
-function M.force_updates(altar, eid)
+function M.force_updates(altar, eid, is_resetting_target)
     -- ALWAYS recalc after a severance.
     local upper_altar = M.get_upper_altar_near(altar)
     local lower_altar = M.get_lower_altar_near(altar)
     local target = M.target_of_altar(upper_altar)
     if target == nil then return false end
-    logger.out("forcing update")
+    logger.out(".. forcing update")
     M.refresh_result(eid, target.item, upper_altar, lower_altar,
         nil, M.is_wand, flask_util.is_flask)
 end
@@ -253,6 +253,7 @@ function M.shared_link_function(altar_id, seen, link_count)
     local holder = M.make_holder(altar_id, seen, link_count + 1)
     M.set_linked_item_behaviors(altar_id, is_upper_altar, seen, holder)
     local destination_item = is_upper_altar and seen.item or (target and target.item)
+    logger.out(".. shared link function of " .. (is_upper_altar and "upper altar" or "lower altar"))
     M.refresh_result(seen.item, destination_item, upper_altar, lower_altar,
         holder, M.is_wand_offer, flask_util.is_flask_offer)
     return true
@@ -288,14 +289,14 @@ function M.refresh_result(source_item, destination_item, upper_altar,
     if wand_id_function(source_item) then
         logger.out(".. of wand")
         if holder then
-            logger.peek(".. using holder", holder)
+            logger.peek(".. holder", holder)
             wand_util:set_holder_wand_stats(source_item, holder)
         end
         wand_util:set_wand_result(destination_item, wand_util:combine_altar_item_stats(upper_altar, lower_altar))
     elseif flask_id_function(source_item) then
         logger.out(".. of flask")
         if holder then
-            logger.peek(".. using holder", holder)
+            logger.peek(".. holder", holder)
             flask_util.store_flask_stats(source_item, holder)
         end
         flask_util.set_flask_results(destination_item, flask_util.merge_flask_stats(upper_altar, lower_altar))
@@ -319,8 +320,8 @@ function M.relink(altar, missing, relink_to)
             break
         end
     end
-    logger.out("relinking unlinked item")
     if M.get_upper_altar_near(altar) == altar then
+        logger.out("refreshing severed target")
         M.force_updates(altar, missing)
     end
     return result
@@ -332,12 +333,15 @@ end
 ---@param eid entity_id The item that was severed
 ---@param is_pickup boolean Whether the item was flagged as picked up
 function M.sever(altar, eid, is_pickup)
+    logger.out("item has gone missing! id " .. eid)
     local holders = EntityGetAllChildren(altar) or {}
     local hid_to_remove = nil ---@type entity_id
+    logger.peek("searching altar holders for a link", holders)
     for _, hid in ipairs(holders) do
         if comp_util.get_entity_id(hid, "eid") == eid then hid_to_remove = hid end
     end
     if hid_to_remove ~= 0 then
+        logger.out("holder found " .. hid_to_remove)
         comp_util.remove_all_components_of_type(hid_to_remove, VSC, nil)
         comp_util.remove_all_components_of_type(hid_to_remove, "AbilityComponent", nil)
         EntityKill(hid_to_remove)
@@ -347,7 +351,7 @@ function M.sever(altar, eid, is_pickup)
     local upperItems = #M.linked_item_array(upperAltar)
     if upperItems > 0 then
         logger.out("updating item due to connection severed")
-        M.force_updates(altar, eid)
+        M.force_updates(upperAltar, eid)
     end
 end
 

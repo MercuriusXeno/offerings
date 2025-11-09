@@ -107,8 +107,9 @@ end
 ---@param eid entity_id Any wand or holder with ability component(s)
 ---@return wand_stats
 function wand_util:convert_to_wand_stats(eid)
-    local comp = comp_util.get_or_create_comp(eid, "AbilityComponent", nil)
+    local comp = comp_util.first_component(eid, "AbilityComponent", nil)
     local result = self:make_stats()
+    if not comp then return result end
     for _, key in ipairs(key_array) do
         local def = self[key]
         local value = def:pull(comp)
@@ -136,12 +137,10 @@ end
 ---@param signed_steps number the positive or negative steps toward [or away] from perfection
 ---@return number The area under the curve representing the cumulative value of the steps
 function stat_def_mt:area_under_curve_of_steps(signed_steps)
-    local adjusted_growth = self.growth - 1.0
     local sign = (signed_steps < 0) and -1 or 1
     local steps = signed_steps * sign
-    local linear_growth = 1.0 - 0.5 * adjusted_growth
-    local result = (linear_growth * steps + 0.5 * adjusted_growth * steps * steps)
-    return result * sign
+    local linear_growth = 1.0 - 0.5 * self.growth
+    return (linear_growth * steps + 0.5 * self.growth * steps * steps) * sign
 end
 
 function stat_def_mt:area_under_curve_of_value(value)
@@ -153,14 +152,13 @@ end
 ---which gets divided by the number of steps, accounting for growth, in the stat def.
 ---@return number
 function stat_def_mt:solve_base_cost()
-    local adjusted_growth = self.growth - 1.0
     if self.base_cost then return self.base_cost end
     local steps_to_perfect =
         (self.inverted and (self.base - self.perfect) or (self.perfect - self.base))
         / self.step_size -- should be > 0 by construction
-    local linear_growth = 1.0 - 0.5 * adjusted_growth
+    local linear_growth = 1.0 - 0.5 * self.growth
     local area_to_perfect =
-        linear_growth * steps_to_perfect + 0.5 * adjusted_growth * steps_to_perfect ^ 2
+        linear_growth * steps_to_perfect + 0.5 * self.growth * steps_to_perfect ^ 2
     self.base_cost = self.total_perfection_cost / area_to_perfect
     return self.base_cost
 end
@@ -172,35 +170,15 @@ function stat_def_mt:worth_from_value(val)
     return self.base_cost * self:area_under_curve_of_value(val)
 end
 
----Turns a number with decimal precision into a string truncated to 2 decimal places at most.
----@param n number some number
----@return string the cleaned up number
-local function pretty(n) return tostring(math.floor(n * 100) / 100) end
-
 function stat_def_mt:value_from_worth(worth)
-    local adjusted_growth = self.growth - 1.0
-    -- specifically mana and charge are linear and we don't want to divide by zero.
-    -- if other things change to linear this guards against dumb.
-    local result = 0
-    if adjusted_growth == 0 then
-        local unsigned_worth = math.abs(worth)
-        local steps_from_base = (unsigned_worth / self.base_cost)
-        local distance = steps_from_base * self.step_size
-        local direction_flip = (self.inverted == (worth < 0)) and 1 or -1
-        local unclamped_result = self.base + direction_flip * distance
-        result = self:clamp(unclamped_result)
-    else
-        local unsigned_worth = math.abs(worth)
-        local linear_growth = 1.0 - 0.5 * adjusted_growth
-        local area = unsigned_worth / self.base_cost
-        local quadratic_term = linear_growth ^ 2 + 2.0 * adjusted_growth * area
-        local steps_from_base = (-linear_growth + math.sqrt(quadratic_term)) / adjusted_growth
-        local distance = steps_from_base * self.step_size
-        local direction_flip = (self.inverted == (worth < 0)) and 1 or -1
-        local unclamped_result = self.base + direction_flip * distance
-        result = self:clamp(unclamped_result)
-    end
-    return result
+    local unsigned_worth = math.abs(worth)
+    local linear_growth = 1.0 - 0.5 * self.growth
+    local area = unsigned_worth / self:solve_base_cost()
+    local steps_from_perfect = (-linear_growth + math.sqrt(linear_growth ^ 2 + 2.0 * self.growth * area)) / self.growth
+    local distance = steps_from_perfect * self.step_size
+    local sign = (self.inverted == (worth < 0)) and 1 or -1
+    local unclamped_result = self.base + sign * distance
+    return self:clamp(unclamped_result)
 end
 
 ---Insert a new wandStatDefinition into the table.
@@ -239,16 +217,13 @@ end
 ---@param offerings wand_stats[] All wands stats as an array of stats holders.
 ---@return wand_stats
 function wand_util:collapse_stat_sums(stats, offerings)
-    for _, key in ipairs(key_array) do        
+    for _, key in ipairs(key_array) do
         local worth = self[key]:worth_from_value(stats[key])
-        --logger.peek("stat", key, "  start", stats[key], "  worth", worth)
         for _, offer in ipairs(offerings) do
             local offer_worth = self[key]:worth_from_value(offer[key])
             worth = worth + offer_worth
-            --logger.peek("  accumulating... ", offer[key], "  worth", offer_worth)
         end
         stats[key] = self[key]:value_from_worth(worth)
-        --logger.peek("  final ", stats[key])
     end
     return stats
 end
@@ -259,6 +234,7 @@ end
 ---@return wand_stats[] result an array of wand stats
 function wand_util:holder_wand_stats_from_altar(altar)
     local holders = EntityGetAllChildren(altar) or {}
+    logger.peek("combining holders", holders, "from altar", altar)
     local result = {}
     for _, child in ipairs(holders) do
         result[#result + 1] = self:convert_to_wand_stats(child)
@@ -276,14 +252,11 @@ end
 function wand_util:combine_altar_item_stats(upper_altar, lower_altar)
     logger.out("merging wand stats of altars")
     local upper_wand_stats = self:holder_wand_stats_from_altar(upper_altar)
-    --logger.peek("upper stats", upper_wand_stats)
     if #upper_wand_stats == 0 then return nil end
     if not lower_altar then return upper_wand_stats[1] end
 
     local offerings = self:holder_wand_stats_from_altar(lower_altar)
-    --logger.peek("offering stats", offerings)
     local blended = self:collapse_stat_sums(upper_wand_stats[1], offerings)
-    --logger.peek("blended stat values", blended)
     return blended
 end
 
@@ -291,10 +264,16 @@ end
 ---@param eid entity_id the wand being added to the altar
 ---@param hid entity_id the holder of the wand representative
 function wand_util:set_holder_wand_stats(eid, hid)
+    logger.out("setting holder " .. hid .. " stats from wand " .. eid)
     -- if the holder doesn't align DO NOT overwrite its stats
-    if comp_util.get_int(hid, "eid") ~= eid then return end
-    -- we don't care to do anything with it, just ensure it exists
+    if comp_util.get_entity_id(hid, "eid") ~= eid then return end
+    local ability = comp_util.first_component(hid, "AbilityComponent", nil)
+    -- if the holder already has a stat block ALSO don't overwrite it.
+    if not ability then
+        EntityAddComponent2(hid, "AbilityComponent", {}) -- create empty ability component
+    end
     local stats = self:convert_to_wand_stats(eid)
+    logger.peek("stats", stats)
     -- set the empty ability component stats to be stored ones
     self:set_wand_result(hid, stats)
 end
@@ -304,10 +283,10 @@ end
 ---@param wand entity_id
 ---@param stats_to_store? wand_stats
 function wand_util:set_wand_result(wand, stats_to_store)
-    logger.peek("storing wand stats", stats_to_store, "  of wand", wand)
+    logger.peek("setting wand stats", stats_to_store, "  of wand", wand)
     if not stats_to_store then return end
-    local ability = comp_util.get_or_create_comp(wand, "AbilityComponent", nil)
-    --logger.peek("ability comp", ability)
+    local ability = comp_util.first_component(wand, "AbilityComponent", nil)
+    if not ability then return end
     for _, key in ipairs(key_array) do
         self[key]:push(ability, stats_to_store[key])
     end
@@ -338,13 +317,13 @@ local config_types = {
 local stat_configs = {
     gun_level = {
         name = "gun_level",
-        min = 1,
-        max = 15,
-        base = 1,
+        min = 0,
+        max = 20,
+        base = 0,
         inverted = false,
         delta = 1.0,
-        growth = 10.0,
-        perfect = 15,
+        growth = 8.0,
+        perfect = 20,
         total_cost_of_perfection = 30000,
     },
     actions_per_round = {
@@ -354,7 +333,7 @@ local stat_configs = {
         base = 1,
         inverted = false,
         delta = 1.0,
-        growth = 4.0,
+        growth = 2.0,
         perfect = 26,
         total_cost_of_perfection = 16000,
     },
@@ -365,7 +344,7 @@ local stat_configs = {
         base = 1,
         inverted = false,
         delta = 1.0,
-        growth = 4.0,
+        growth = 2.0,
         perfect = 26,
         total_cost_of_perfection = 16000.0,
     },
@@ -384,7 +363,7 @@ local stat_configs = {
         name = "reload_time",
         min = -240.0,
         max = 240.0,
-        base = 240.0,
+        base = 16.0,
         inverted = true,
         delta = 1.0,
         growth = 1.4,
@@ -406,7 +385,7 @@ local stat_configs = {
         name = "spread_degrees",
         min = -1440.0,
         max = 1440.0,
-        base = 1440.0,
+        base = 0.0,
         inverted = true,
         delta = 1.0,
         growth = 1.6,
@@ -417,7 +396,7 @@ local stat_configs = {
         name = "fire_rate_wait",
         min = -240.0,
         max = 240.0,
-        base = 240.0,
+        base = 8.0,
         inverted = true,
         delta = 1.0,
         growth = 1.4,
