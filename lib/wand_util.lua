@@ -13,7 +13,6 @@ local logger = dofile_once("mods/offerings/lib/log_util.lua") ---@type log_util
 ---| "mana_charge_speed"
 ---| "mana_max"
 ---| "gun_level"
----| "cost"
 
 local keys = {
     actions_per_round = "actions_per_round",
@@ -25,13 +24,11 @@ local keys = {
     speed_multiplier = "speed_multiplier",
     mana_charge_speed = "mana_charge_speed",
     mana_max = "mana_max",
-    gun_level = "gun_level",
-    cost = "cost"
+    gun_level = "gun_level"
 } ---@type {[string]: wand_stat_key}
 
 local iKeys = {
     keys.gun_level,
-    keys.cost,
     keys.mana_max,
     keys.mana_charge_speed,
     keys.deck_capacity,
@@ -71,7 +68,6 @@ local wand_util = {} ---@class wand_util:{[wand_stat_key]: wand_stat_def}
 ---@return number
 function stat_def_mt:pull(abilityComp)
     local result = 0
-    if self.key == keys.cost then return result end
     if self.cObj then
         result = comp_util.component_object_get(abilityComp, self.cObj, self.key)
     else
@@ -87,7 +83,6 @@ end
 ---@param abilityComp component_id the ability component of the stat
 ---@param amount number the amount to set the value of the comp field to
 function stat_def_mt:push(abilityComp, amount)
-    if self.key == keys.cost then return end
     local value = amount ---@type number|boolean
     if self.key == keys.shuffle_deck_when_empty then value = (value == 1) end
     if self.cObj then
@@ -145,15 +140,6 @@ end
 ---@param amount number the number to clamp by the cfg min and max
 ---@return number the clamped amount after applying the stat def min and max
 function stat_def_mt:clamp(amount)
-    -- i was being precious with fractions here but fractions are good, actually.
-    -- this lets the game track partial progress and it doesn't mess with how the value displays.
-    -- if we start seeing weird behaviors from partial/float values we can try clamping in thresholds
-    -- like.. within 1e-6 or something. but leave this off, otherwise, or we lose partial progress as a mechanic.
-
-    -- local step_scaled_amount = amount * (1 / self.step_size)
-    -- local integral = self.inverted and math.ceil(step_scaled_amount) or math.floor(step_scaled_amount)
-    -- local clean_value = integral * self.step_size
-    -- return math.max(self.min, math.min(self.max, clean_value))
     return math.max(self.min, math.min(self.max, amount))
 end
 
@@ -545,6 +531,5 @@ wand_util:makeDef(keys.gun_level)
 -- mana and charge speed divide whatever remains
 wand_util:makeDef(keys.mana_max)
 wand_util:makeDef(keys.mana_charge_speed)
-wand_util:makeDef(keys.cost)
 
 return wand_util

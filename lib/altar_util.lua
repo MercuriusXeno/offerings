@@ -127,9 +127,6 @@ local function isMissingItemPickedUp(seen)
 end
 
 local function isLinkableItem(eid)
-    --logger.about("eid", eid, "is altar?", isAltar(eid), "isWandEnhancer?", isWandEnhancer(eid),
-    --     "isFlaskEnhancer?", isFlaskEnhancer(eid), "isItemInInventory?", isItemInInventory(eid),
-    --     "is any parent?", EntityGetParent(eid) == 0)
     return not isAltar(eid) and (isWandEnhancer(eid) or flask_util.isFlaskEnhancer(eid))
         and not entity_util.isItemInInventory(eid) and EntityGetParent(eid) == 0
 end
@@ -149,7 +146,6 @@ local function linkableItemsNear(altar, isUpper)
     local entities = EntityGetInRadius(x, y, radius)
     for _, eid in ipairs(entities) do
         if isLinkableItem(eid) then
-            --logger.about("linkable item found", eid)
             local ex, ey = EntityGetTransform(eid)
             local h = ((ex - x) ^ 2 + (ey - y) ^ 2) ^ 0.5
             if h <= radius and entityIn(ex, ey, x, y, radius, 10) then
@@ -248,7 +244,7 @@ local function forceUpdates(altar, eid, isResetting)
         if not isResetting then
             combinedWands = wand_util:gather_altar_wand_stats_and_merge(upperAltar, lowerAltar)
         end
-        --logger.about("combined stats after severance recalc", combinedWands)
+        logger.about("combined stats after severance recalc", combinedWands)
         wand_util:set_wand_result(target.item, combinedWands)
     end
     if flask_util.isFlask(eid) then
