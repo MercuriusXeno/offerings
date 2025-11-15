@@ -1,6 +1,6 @@
 dofile_once("data/scripts/lib/utilities.lua")
 
-local flask_util = dofile_once("mods/offerings/lib/flask_util.lua") ---@type offering_flask_util
+local container_util = dofile_once("mods/offerings/lib/container_util.lua") ---@type offering_container_util
 local comp_util = dofile_once("mods/offerings/lib/comp_util.lua") ---@type offering_component_util
 local entity_util = dofile_once("mods/offerings/lib/entity_util.lua") ---@type offering_entity_util
 local logger = dofile_once("mods/offerings/lib/log_util.lua") ---@type log_util
@@ -40,7 +40,7 @@ local flask_pickup_script = {
     mTimesExecutedThisFrame = 0
 }
 
-local wand_pickup_sript = {
+local wand_pickup_script = {
     execute_every_n_frame = 1,
     execute_times = 0,
     limit_how_many_times_per_frame = -1,
@@ -75,13 +75,13 @@ function M.is_wand(eid) return EntityHasTag(eid, "wand") end
 
 function M.is_wand_offer(eid) return M.is_wand(eid) end
 
-function M.is_valid_target(eid) return M.is_wand(eid) or flask_util.is_flask(eid) end
+function M.is_valid_target(eid) return M.is_wand(eid) or container_util.is_container(eid) end
 
 function M.is_wand_match(target, offer) return M.is_wand(target) and M.is_wand_offer(offer) end
 
-function M.is_flask_match(target, offer)
-    return flask_util.is_flask(target) and
-        flask_util.is_flask_offer(offer)
+function M.is_flask_or_pouch_match(target, offer)
+    return (container_util.is_flask(target) and container_util.is_flask_offer(offer))
+        or (container_util.is_pouch(target) and container_util.is_pouch_offer(offer))
 end
 
 ---Test that the target can be improved by the offering
@@ -90,7 +90,7 @@ end
 ---@return boolean result true if the target can consume the offering, otherwise false
 function M.is_valid_offer(target, eid)
     return M.is_wand_match(target, eid) or
-        M.is_flask_match(target, eid)
+        M.is_flask_or_pouch_match(target, eid)
 end
 
 ---Find the missing links in our already linked items, returning those unseen by the loop
@@ -120,7 +120,7 @@ function M.get_severed_links(seenItems, alreadyLinked)
 end
 
 function M.is_linkable_item(eid)
-    return not M.is_altar(eid) and (M.is_wand_offer(eid) or flask_util.is_flask_offer(eid))
+    return not M.is_altar(eid) and (M.is_wand_offer(eid) or container_util.is_flask_offer(eid))
         and not entity_util.is_item_in_player_inventory(eid) and EntityGetParent(eid) == 0
 end
 
@@ -231,9 +231,8 @@ function M.force_updates(altar, eid, is_resetting_target)
     local lower_altar = M.get_lower_altar_near(altar)
     local target = M.target_of_altar(upper_altar)
     if target == nil then return false end
-    logger.out(".. forcing update")
     M.refresh_result(eid, target.item, upper_altar, lower_altar,
-        nil, M.is_wand, flask_util.is_flask)
+        nil, M.is_wand, container_util.is_container)
 end
 
 function M.shared_link_function(altar_id, seen, link_count)
@@ -253,9 +252,8 @@ function M.shared_link_function(altar_id, seen, link_count)
     local holder = M.make_holder(altar_id, seen, link_count + 1)
     M.set_linked_item_behaviors(altar_id, is_upper_altar, seen, holder)
     local destination_item = is_upper_altar and seen.item or (target and target.item)
-    logger.out(".. shared link function of " .. (is_upper_altar and "upper altar" or "lower altar"))
     M.refresh_result(seen.item, destination_item, upper_altar, lower_altar,
-        holder, M.is_wand_offer, flask_util.is_flask_offer)
+        holder, M.is_wand_offer, container_util.is_flask_offer)
     return true
 end
 
@@ -270,8 +268,7 @@ end
 ---@param upper_altar entity_id The target altar restoring the item
 ---@param seen seen_item The item id being restored
 function M.target_sever(upper_altar, seen)
-    logger.out("target severed")
-    M.refresh_result(seen.item, nil, upper_altar, nil, nil, M.is_wand, flask_util.is_flask)
+    M.refresh_result(seen.item, nil, upper_altar, nil, nil, M.is_wand, container_util.is_container)
 end
 
 ---Common logic of the various update procedures, refactors/deduplicates some calls
@@ -281,25 +278,21 @@ end
 ---@param lower_altar? entity_id the lower altar id, passing nil will reset the target item
 ---@param holder? entity_id the holder we attached to represent an item, if applicable
 ---@param wand_id_function fun(eid: entity_id): boolean Function detecting that the wand side of the update should happen
----@param flask_id_function fun(eid: entity_id): boolean Function detecting that the flask side of the update should happen
+---@param container_id_function fun(eid: entity_id): boolean Function detecting that the container side of the update should happen
 function M.refresh_result(source_item, destination_item, upper_altar,
-                          lower_altar, holder, wand_id_function, flask_id_function)
-    logger.out("refreshing results")
+                          lower_altar, holder, wand_id_function, container_id_function)
     if not destination_item then destination_item = source_item end
     if wand_id_function(source_item) then
-        logger.out(".. of wand")
         if holder then
-            logger.peek(".. holder", holder)
             wand_util:set_holder_wand_stats(source_item, holder)
         end
-        wand_util:set_wand_result(destination_item, wand_util:combine_altar_item_stats(upper_altar, lower_altar))
-    elseif flask_id_function(source_item) then
-        logger.out(".. of flask")
+        local wand_stats, always_casts, form = wand_util:combine_altar_item_stats(upper_altar, lower_altar)
+        wand_util:set_wand_result(destination_item, wand_stats, always_casts, form)
+    elseif container_id_function(source_item) then
         if holder then
-            logger.peek(".. holder", holder)
-            flask_util.store_flask_stats(source_item, holder)
+            container_util.store_container_stats(source_item, holder)
         end
-        flask_util.set_flask_results(destination_item, flask_util.merge_flask_stats(upper_altar, lower_altar))
+        container_util.set_container_results(destination_item, container_util.merge_container_stats(upper_altar, lower_altar))
     end
 end
 
@@ -321,7 +314,6 @@ function M.relink(altar, missing, relink_to)
         end
     end
     if M.get_upper_altar_near(altar) == altar then
-        logger.out("refreshing severed target")
         M.force_updates(altar, missing)
     end
     return result
@@ -333,24 +325,23 @@ end
 ---@param eid entity_id The item that was severed
 ---@param is_pickup boolean Whether the item was flagged as picked up
 function M.sever(altar, eid, is_pickup)
-    logger.out("item has gone missing! id " .. eid)
     local holders = EntityGetAllChildren(altar) or {}
     local hid_to_remove = nil ---@type entity_id
-    logger.peek("searching altar holders for a link", holders)
     for _, hid in ipairs(holders) do
         if comp_util.get_entity_id(hid, "eid") == eid then hid_to_remove = hid end
     end
     if hid_to_remove ~= 0 then
-        logger.out("holder found " .. hid_to_remove)
         comp_util.remove_all_components_of_type(hid_to_remove, VSC, nil)
         comp_util.remove_all_components_of_type(hid_to_remove, "AbilityComponent", nil)
+        -- a really excellent way to avoid including the holder in the resulting update
+        -- is to unparent it, not sure why i didn't think of this sooner?
+        EntityRemoveFromParent(hid_to_remove)
         EntityKill(hid_to_remove)
     end
     if is_pickup then return end
     local upperAltar = M.get_upper_altar_near(altar)
     local upperItems = #M.linked_item_array(upperAltar)
     if upperItems > 0 then
-        logger.out("updating item due to connection severed")
         M.force_updates(upperAltar, eid)
     end
 end
@@ -358,12 +349,12 @@ end
 function M.destroy_used_offerings(target, altar)
     local function is_destroying(offer)
         if M.is_wand(target) then return M.is_wand_offer(offer) end
-        if flask_util.is_flask(target) then return flask_util.is_flask_offer(offer) end
+        if container_util.is_container(target) then return container_util.is_flask_offer(offer) end
         return false
     end
     local function destroy(offer)
         -- before destroying flasks, empty them
-        if flask_util.is_flask(offer) then RemoveMaterialInventoryMaterial(offer) end
+        if container_util.is_container(offer) then RemoveMaterialInventoryMaterial(offer) end
         -- before destroying wands, drop their spells
         local x, y = EntityGetTransform(offer)
         if M.is_wand(offer) then M.drop_spells(offer, x, y) end
@@ -417,6 +408,7 @@ function M.set_linked_item_behaviors(altar, is_upper_altar, seen, hid)
         -- ensure the item holder matches the item's new location
         seen.x = dx
         seen.y = dy
+        -- make the hid match the item
         if hid then EntitySetTransform(hid, dx, dy, vertically_rotated) end
         comp_util.set_each_component_type_field(seen.item, IC, nil, "spawn_pos", dx, dy)
     end
@@ -435,7 +427,7 @@ function M.set_linked_item_behaviors(altar, is_upper_altar, seen, hid)
 
     -- re-enables the first time pickup particles, which are fancy
     if is_upper_altar then
-        local pickup = M.is_wand(seen.item) and wand_pickup_sript or flask_pickup_script
+        local pickup = M.is_wand(seen.item) and wand_pickup_script or flask_pickup_script
         if is_holder_linked and not comp_util.has_component_of_type_with_field_equal(seen.item, LC, nil, pickup_lua, pickup[pickup_lua]) then
             EntityAddComponent2(seen.item, LC, pickup)
         else

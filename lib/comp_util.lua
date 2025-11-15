@@ -1,5 +1,5 @@
 local util = dofile_once("mods/offerings/lib/util.lua") ---@type offering_util
-
+local logger = dofile_once("mods/offerings/lib/log_util.lua") ---@type log_util
 local VSC = "VariableStorageComponent"
 
 ---@class Vsc
@@ -53,6 +53,31 @@ function M.get_component_value(comp, field)
   return v
 end
 
+---@class vector2
+---@field x number
+---@field y number
+
+---Return an object's property in a comp
+---@param comp? component_id
+---@param field string the field name
+---@return vector2
+function M.get_component_value_vector(comp, field)
+  ---@type number[]
+  local v = M.get_component_value(comp, field)
+  logger.peek("vectors look like", v)
+  ---@type vector2
+  return { x = v[1], y = v[2] }
+end
+
+---Set the value of a component field, can take table arguments
+---@param comp? component_id
+---@param field string
+---@param x number
+---@param y number
+function M.set_component_value_vector(comp, field, x, y)
+  if comp then ComponentSetValue2(comp, field, x, y) end
+end
+
 ---Set the value of a component field, can take table arguments
 ---@param comp? component_id
 ---@param field string
@@ -84,7 +109,6 @@ function M.is_component_field_value_like(comp, field, value)
   return M.get_component_value(comp, field):find(value)
 end
 
-
 ---Iterate over each component and execute a delegate on it
 ---@param eid entity_id the entity whose components we're iterating
 ---@param ctype string the component type to iterate
@@ -109,10 +133,16 @@ function M.each_component_of_type_with_field_like(eid, ctype, tag, field, val, f
 end
 
 function M.get_or_create_comp(eid, ctype, tag)
-  return M.first_component(eid, ctype, tag) or EntityAddComponent2(eid, ctype, {})
+  local default = {}
+  if tag ~= nil then default._tags = tag end
+  return M.first_component(eid, ctype, tag) or EntityAddComponent2(eid, ctype, default)
 end
 
--- First/getters
+---Return the first component matching the type and tag provided.
+---@param eid entity_id
+---@param ctype string
+---@param tag? string
+---@return component_id?
 function M.first_component(eid, ctype, tag)
   if tag == nil then
     return EntityGetFirstComponentIncludingDisabled(eid, ctype) or nil

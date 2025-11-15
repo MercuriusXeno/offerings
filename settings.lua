@@ -18,6 +18,13 @@ mod_settings =
 		scope = MOD_SETTING_SCOPE_NEW_GAME,
 		value_default = true,
 	},
+	{
+		id = "transmute_wands_when_merged",
+		ui_name = "Wands Change Forms",
+		ui_description = "When merging wands, change the form of the wand to the nearest similar wand.",
+		scope = MOD_SETTING_SCOPE_NEW_GAME,
+		value_default = true,
+	},
 }
 
 function ModSettingsUpdate(init_scope)
