@@ -465,12 +465,13 @@ function wand_util:get_wand_form_from_stats(wand_stats)
     wand_comparable.spread_degrees = wand_util.clamp(((wand_stats["spread_degrees"] + 5) / 5) - 1, 0, 2)
     wand_comparable.reload_time = wand_util.clamp(((wand_stats["reload_time"] + 5) / 25) - 1, 0, 2)
 
+    ---@diagnostic disable-next-line: undefined-global
     for _, wand_from_library in pairs(wands) do
         local score = wand_util:wand_diff(wand_comparable, wand_from_library)
         if (score <= nearest_score) then
             closest_match = wand_from_library
             nearest_score = score
-            -- just randomly return one of them...
+            -- this avoids aborting early in the loop if equal wands form a clique
             if (score == 0 and Random(0, 100) < 33) then
                 break
             end

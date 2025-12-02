@@ -29,7 +29,7 @@ local function prefix_enchantment(s) return prefix_base("enchant_" .. s) end
 local ENCHANT_PREFIX_LENGTH = #prefix_enchantment("")
 local function unprefix_enchantment(s) return unprefix(s, ENCHANT_PREFIX_LENGTH) end
 
-local DRAINING_XML = "mods/offerings/entity/draining.xml"
+local REMOTE_XML = "mods/offerings/entity/draining.xml"
 
 ---@class container_stat_definition
 ---@field key string
@@ -226,10 +226,10 @@ function M.set_remote_enchant_level(eid, level)
         local entitiesNearMouse = EntityGetInRadius(mouseX, mouseY, 100)
         local existingDrain = nil
         for _, e in ipairs(entitiesNearMouse) do
-            if EntityGetFilename(e) == DRAINING_XML then existingDrain = e end
+            if EntityGetFilename(e) == REMOTE_XML then existingDrain = e end
         end
         if not existingDrain then
-            EntityLoad(DRAINING_XML, mouseX, mouseY)
+            EntityLoad(REMOTE_XML, mouseX, mouseY)
         end
     end
 end
@@ -244,10 +244,10 @@ function M.set_aspected_enchant_level(eid, level)
         local entitiesNearMouse = EntityGetInRadius(mouseX, mouseY, 100)
         local existingDrain = nil
         for _, e in ipairs(entitiesNearMouse) do
-            if EntityGetFilename(e) == DRAINING_XML then existingDrain = e end
+            if EntityGetFilename(e) == REMOTE_XML then existingDrain = e end
         end
         if not existingDrain then
-            EntityLoad(DRAINING_XML, mouseX, mouseY)
+            EntityLoad(REMOTE_XML, mouseX, mouseY)
         end
     end
 end
@@ -298,7 +298,7 @@ function M.get_reaction_speed_description(combined, level)
     return tostring(math.floor(barrel / 200) * (level + 1))
 end
 
-M.shared_enchantment_definitions = {
+M.common_enchantments = {
     {
         key = "remote",
         evaluators = { M.get_long_distance_cast_value },
@@ -317,7 +317,7 @@ M.shared_enchantment_definitions = {
     },
 }
 
-M.flask_enchantment_definitions = {
+M.flask_enchantments = {
     {
         key = "tempered",
         evaluators = { M.get_brimstone_value },
@@ -352,7 +352,7 @@ M.flask_enchantment_definitions = {
     }
 }
 
-M.pouch_enchantment_definitions = {
+M.pouch_enchantments = {
     -- same as tempered, just named differently
     {
         key = "unbreakable",
@@ -365,17 +365,25 @@ M.pouch_enchantment_definitions = {
 }
 
 -- seed pouch/flask enchants with shared enchants
-for _, shared_enchant in M.shared_enchantment_definitions do
-    M.flask_enchantment_definitions[#M.flask_enchantment_definitions + 1] = shared_enchant
-    M.pouch_enchantment_definitions[#M.pouch_enchantment_definitions + 1] = shared_enchant
+for _, shared_enchant in ipairs(M.common_enchantments) do
+    M.flask_enchantments[#M.flask_enchantments + 1] = shared_enchant
+    M.pouch_enchantments[#M.pouch_enchantments + 1] = shared_enchant
 end
 
----Return whether the item has an enchantment value of any kind
----@param eid entity_id
----@return boolean
-function M.has_flask_enchant_value(eid)
-    for _, enchant in ipairs(M.flask_enchantment_definitions) do
-        if M.get_flask_enchantment_value(enchant, eid) ~= 0 then
+function M.get_enchants_for_entity(eid)
+    local result = {}
+    if M.is_flask(eid) then result = M.flask_enchantments end
+    if M.is_pouch(eid) then result = M.pouch_enchantments end
+    return result
+end
+
+function M.has_enchant_value_for_entity(offer, eid)
+    return M.has_enchant_value(offer, M.get_enchants_for_entity(eid))
+end
+
+function M.has_enchant_value(offer, enchants)
+    for _, enchant in ipairs(enchants) do
+        if M.get_flask_enchantment_value(enchant, offer) ~= 0 then
             return true
         end
     end
@@ -385,27 +393,25 @@ end
 ---Return whether the item has an enchantment value of any kind
 ---@param eid entity_id
 ---@return boolean
-function M.has_pouch_enchant_value(eid)
-    for _, enchant in ipairs(M.pouch_enchantment_definitions) do
-        if M.get_flask_enchantment_value(enchant, eid) ~= 0 then
-            return true
-        end
-    end
-    return false
-end
+function M.has_flask_enchant_value(eid) return M.has_enchant_value(eid, M.flask_enchantments) end
+
+---Return whether the item has an enchantment value of any kind
+---@param eid entity_id
+---@return boolean
+function M.has_pouch_enchant_value(eid) return M.has_enchant_value(eid, M.pouch_enchantments) end
 
 ---Set the description of the pouch in the UI so the player knows its stats
 ---@param combined container_stats
 ---@return string
 function M.get_pouch_description(combined)
-    return M.get_container_description(combined, M.flask_enchantment_definitions)
+    return M.get_container_description(combined, M.flask_enchantments)
 end
 
 ---Set the description of the flask in the UI so the player knows its stats
 ---@param combined container_stats
 ---@return string
 function M.get_flask_description(combined)
-    return M.get_container_description(combined, M.flask_enchantment_definitions)
+    return M.get_container_description(combined, M.flask_enchantments)
 end
 
 ---Set the description of the container in the UI so the player knows its stats
@@ -528,8 +534,8 @@ function M.store_container_stats(eid, hid)
         -- pouch enchants and flask enchants are different
         local valid_enchants = nil
 
-        if M.is_flask(eid) then valid_enchants = M.flask_enchantment_definitions end
-        if M.is_pouch(eid) then valid_enchants = M.pouch_enchantment_definitions end
+        if M.is_flask(eid) then valid_enchants = M.flask_enchantments end
+        if M.is_pouch(eid) then valid_enchants = M.pouch_enchantments end
         if valid_enchants then
             for _, def in ipairs(valid_enchants) do
                 push_enchantment(def.key, M.get_enchant_level(eid, def.key))
@@ -554,7 +560,7 @@ function M.store_container_stats(eid, hid)
         end
 
         -- add any enchant levels to the result
-        for _, def in ipairs(M.flask_enchantment_definitions) do
+        for _, def in ipairs(M.flask_enchantments) do
             local level = 0
             for _, eval in ipairs(def.evaluators) do level = level + eval(eid) end
             push_enchantment(def.key, level)
@@ -576,7 +582,7 @@ function M.merge_container_stats(upperAltar, lowerAltar)
 
     local offerings = M.get_holder_container_stats(lowerAltar)
     M.collapse_flask_stats(upperFlaskStats[1], offerings)
-    return M.get_merged_flask_stats(upperFlaskStats[1])
+    return M.get_merged_container_stats(upperFlaskStats[1])
 end
 
 ---Scrape the stats out of a flask or holder's stat blocks and collapse them into one result.
@@ -609,7 +615,7 @@ end
 
 ---Returns an empty flask stat table to work on
 ---@return container_stats
-function M.make_flask_stats()
+function M.make_container_stats()
     return {
         enchantments = {},
         barrel_size = {},
@@ -621,13 +627,13 @@ function M.make_flask_stats()
     } ---@type container_stats
 end
 
----Take a single flask stat assemblage and blend the arrays into a flattened FlaskStat with only
+---Take a single container stat assemblage and blend the arrays into a flattened container_stats with only
 ---one value per array (or enchants and materials condensed to flat maps, obviously they're still tables)
 ---@param stats container_stats|nil
 ---@return container_stats|nil
-function M.get_merged_flask_stats(stats)
+function M.get_merged_container_stats(stats)
     if not stats then return nil end
-    local result = M.make_flask_stats()
+    local result = M.make_container_stats()
     for _, def in ipairs(CONTAINER_STAT_DEFINITIONS) do
         local pool = stats[def.key]
         if def.formula == "group_sum" then
@@ -647,9 +653,9 @@ function M.get_merged_flask_stats(stats)
                 if def.formula == "sum" then
                     table.insert(pool, 1, a + b)
                 elseif def.formula == "blend_throttled" then
-                    local scale = 0.5
-                    local limit = def.key == "spray_velocity_coeff" and 225 or 1.5
-                    local aMerge = util.asymmetricMerge(scale, limit, a, b)
+                    local scale = 0.4
+                    local limit = def.key == "spray_velocity_coeff" and 150 or 1.0
+                    local aMerge = util.asymmetric_merge(scale, limit, a, b)
                     table.insert(pool, 1, aMerge)
                 end
             end
@@ -665,7 +671,7 @@ function M.get_merged_flask_stats(stats)
             result.enchantments[k] = math.min(d.max, math.max(d.min, result.enchantments[k]))
         end
     end
-    for _, def in ipairs(M.flask_enchantment_definitions) do
+    for _, def in ipairs(M.flask_enchantments) do
         if result.enchantments[def.key] then
             clamp_enchantment_levels(def.key, def)
         end
@@ -697,7 +703,7 @@ function M.set_container_results(eid, combined)
         comp_util.set_component_value(potion, "dont_spray_just_leak_gas_materials", false)
         comp_util.set_component_value(potion, "throw_bunch", false)
     end
-    for _, def in ipairs(M.flask_enchantment_definitions) do
+    for _, def in ipairs(M.flask_enchantments) do
         local level = combined.enchantments[def.key] or 0
         def.apply(eid, level)
     end

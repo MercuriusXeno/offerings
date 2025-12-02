@@ -89,6 +89,7 @@ end
 ---@param eid entity_id A lower altar potential linked item
 ---@return boolean result true if the target can consume the offering, otherwise false
 function M.is_valid_offer(target, eid)
+    logger.peek("checking if target", target, "valid for offering", eid)
     return M.is_wand_match(target, eid) or
         M.is_flask_or_pouch_match(target, eid)
 end

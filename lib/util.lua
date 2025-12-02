@@ -14,14 +14,14 @@ end
 function M.increment(t, f, v) t[f] = (t[f] or 0) + v end
 
 -- symmetric when s (shallowness) is 1
-function M.asymmetricMerge(s, l, a, b) return l - (l - a) * (l - s * b) / l end
+function M.asymmetric_merge(s, l, a, b) return l - (l - a) * (l - s * b) / l end
 
-function M.symmetricMerge(l, a, b) return M.asymmetricMerge(1, l, a, b) end
+function M.symmetricMerge(l, a, b) return M.asymmetric_merge(1, l, a, b) end
 
 function M.complimentaryProduct(s, l, vs)
   local r = 0
   for _, v in ipairs(vs) do
-    if r == 0 then r = v else r = M.asymmetricMerge(s, l, r, v) end
+    if r == 0 then r = v else r = M.asymmetric_merge(s, l, r, v) end
   end
   return r
 end
