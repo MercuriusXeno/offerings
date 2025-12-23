@@ -29,7 +29,7 @@ local function prefix_enchantment(s) return prefix_base("enchant_" .. s) end
 local ENCHANT_PREFIX_LENGTH = #prefix_enchantment("")
 local function unprefix_enchantment(s) return unprefix(s, ENCHANT_PREFIX_LENGTH) end
 
-local REMOTE_XML = "mods/offerings/entity/draining.xml"
+local REMOTE_XML = "mods/offerings/entity/remote.xml"
 
 ---@class container_stat_definition
 ---@field key string
